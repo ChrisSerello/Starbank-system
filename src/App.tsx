@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { BrowserRouter } from 'react-router-dom'; // <--- O IMPORT QUE FALTAVA
 import { supabase } from './supabase';
 import { Login } from './components/Login';
 import { OperatorDashboard } from './components/OperatorDashboard';
@@ -11,14 +12,14 @@ function App() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // 1. Verifica se já tem sessão ativa
+    // 1. Verifica sessão inicial
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       if (session) fetchUserRole(session.user.id);
       else setLoading(false);
     });
 
-    // 2. Escuta mudanças no login (entrar/sair)
+    // 2. Escuta mudanças (Login/Logout)
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
       if (session) {
@@ -32,7 +33,6 @@ function App() {
     return () => subscription.unsubscribe();
   }, []);
 
-  // Busca o cargo (role) no banco de dados
   const fetchUserRole = async (userId: string) => {
     try {
       const { data, error } = await supabase
@@ -42,7 +42,6 @@ function App() {
         .single();
 
       if (data) {
-        console.log("Cargo encontrado:", data.role); // Para debug
         setUserRole(data.role);
       }
     } catch (error) {
@@ -52,7 +51,7 @@ function App() {
     }
   };
 
-  // Tela de Carregamento (enquanto decide para onde ir)
+  // Tela de Carregamento
   if (loading) {
     return (
       <div className="min-h-screen bg-[#020005] flex items-center justify-center">
@@ -61,19 +60,19 @@ function App() {
     );
   }
 
-  // Se não estiver logado, mostra Login
-  if (!session) {
-    return <Login />;
-  }
-
-  // --- AQUI ESTÁ A MÁGICA ---
-  // Se for Supervisor, mostra o Painel Supremo
-  if (userRole === 'supervisor') {
-    return <SupervisorDashboard />;
-  }
-
-  // Se for qualquer outra coisa (operator), mostra o Painel Padrão
-  return <OperatorDashboard />;
+  
+  // Envolvemos tudo no BrowserRouter para o "useNavigate" funcionar
+  return (
+    <BrowserRouter>
+      {!session ? (
+        <Login />
+      ) : userRole === 'supervisor' ? (
+        <SupervisorDashboard />
+      ) : (
+        <OperatorDashboard />
+      )}
+    </BrowserRouter>
+  );
 }
 
 export default App;
