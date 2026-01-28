@@ -48,7 +48,7 @@ export const SupervisorDashboard = () => {
   const [activeTab, setActiveTab] = useState<'history' | 'team'>('team'); // Padrão: Visão de Equipe
   const [searchQuery, setSearchQuery] = useState('');
 
-  // ESTADOS DO DUELO (Sim, supervisor também duela!)
+  // ESTADOS DO DUELO
   const [selectedOpponentId, setSelectedOpponentId] = useState<string | null>(null);
   const [selectedGoal, setSelectedGoal] = useState<number>(50000);
   const [activeDuel, setActiveDuel] = useState<{opponentName: string, opponentSales: number, goal: number} | null>(null);
@@ -68,12 +68,12 @@ export const SupervisorDashboard = () => {
         const { data: mySales } = await supabase.from('sales').select('*').eq('user_id', user.id).order('created_at', { ascending: false });
         if (mySales) setSales(mySales);
 
-        // Carregar Time Completo (Para Ranking e Duelos)
+        // Carregar Time Completo
         fetchTeamData(user.id);
     };
     init();
 
-    // Realtime: Atualizar ranking se alguém vender
+    // Realtime
     const sub = supabase.channel('supervisor-global').on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => {
         if(userProfile) fetchTeamData(userProfile.id);
     }).subscribe();
@@ -82,12 +82,11 @@ export const SupervisorDashboard = () => {
   }, [navigate, userProfile?.id]);
 
   const fetchTeamData = async (myId: string) => {
-      // Pega todos (inclusive eu, para o ranking)
       const { data } = await supabase.from('profiles').select('*').order('sales_total', { ascending: false });
       if (data) setTeamAgents(data);
   }
 
-  // CÁLCULOS PESSOAIS
+  // CÁLCULOS
   const totalSales = useMemo(() => sales.reduce((acc, curr) => acc + Number(curr.value), 0), [sales]);
   const nextGoal = GOALS.find(g => g > totalSales) || GOALS[GOALS.length - 1];
   const progressPercent = Math.min(100, (totalSales / nextGoal) * 100);
@@ -104,7 +103,7 @@ export const SupervisorDashboard = () => {
     const { data, error } = await supabase.from('sales').insert([{
         user_id: userProfile.id,
         client_name: formData.client,
-        agreement: formData.agreement,
+        agreement: formData.agreement, // AGORA O CONVÊNIO VAI PRO BANCO
         product: formData.product,
         value: val
     }]).select();
@@ -112,7 +111,6 @@ export const SupervisorDashboard = () => {
     if (!error && data) {
         setSales([data[0], ...sales]);
         setFormData({ ...formData, client: '', value: '' });
-        // Atualiza meu total no banco
         await supabase.from('profiles').update({ sales_total: totalSales + val }).eq('id', userProfile.id);
         fetchTeamData(userProfile.id);
     }
@@ -130,14 +128,11 @@ export const SupervisorDashboard = () => {
     }
   };
 
-  // FILTRO DO TIME (Raio-X)
-  const filteredTeam = teamAgents.filter(agent => 
-      agent.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredTeam = teamAgents.filter(agent => agent.name.toLowerCase().includes(searchQuery.toLowerCase()));
 
   return (
     <div className="min-h-screen relative font-sans text-white overflow-hidden bg-[#020005]">
-      {/* Background Supremo */}
+      {/* Background */}
       <div className="fixed inset-0 bg-[size:400%_400%] animate-nebula-flow bg-gradient-to-br from-[#0f0014] via-[#05000a] to-[#000000] -z-20"></div>
       <div className="fixed inset-0 cyber-grid opacity-10 mix-blend-screen -z-10"></div>
       <div className="scanline opacity-20"></div>
@@ -146,7 +141,7 @@ export const SupervisorDashboard = () => {
         <img src="https://cdn-icons-png.flaticon.com/512/2026/2026465.png" alt="Mascote" className="w-full h-full object-contain" style={{filter: 'hue-rotate(45deg)'}} />
       </motion.div>
 
-      {/* HEADER SUPREMO */}
+      {/* HEADER */}
       <header className="fixed top-0 w-full z-50 px-6 py-3 bg-[#0a0510]/90 backdrop-blur-xl border-b border-yellow-500/10 flex justify-between items-center shadow-2xl">
         <div className="flex items-center gap-4">
             <div className="relative group">
@@ -177,11 +172,10 @@ export const SupervisorDashboard = () => {
 
       <main className="pt-24 px-6 pb-10 max-w-[1800px] mx-auto grid grid-cols-12 gap-6 relative z-10 h-screen overflow-y-auto custom-scrollbar">
         
-        {/* === LINHA 1: KPIS PESSOAIS (Igual Operador) === */}
+        {/* KPIS */}
         <div className="col-span-12 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
             <KpiCardHolo title="Suas Vendas" value={formatCurrency(totalSales)} icon={Target} colorName="gold" delay={0.1} />
             <KpiCardHolo title="Sua Comissão" value={formatCurrency(commission)} icon={DollarSign} colorName="green" delay={0.2} />
-            
             <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.3 }} className="sm:col-span-2 lg:col-span-2 holo-card rounded-2xl p-6 bg-gradient-to-r from-[#1a1025] to-transparent border border-purple-500/30 relative overflow-hidden">
                 <div className="absolute right-0 top-0 opacity-20"><Zap size={100} className="text-purple-500"/></div>
                 <div className="relative z-10">
@@ -200,26 +194,47 @@ export const SupervisorDashboard = () => {
             </motion.div>
         </div>
 
-        {/* === COLUNA ESQUERDA: AÇÃO (INPUT + DUELO) === */}
+        {/* COLUNA ESQUERDA */}
         <div className="col-span-12 lg:col-span-4 space-y-6">
             
-            {/* Input de Venda (Estilo Gold) */}
+            {/* INPUT DE VENDA (AGORA COM CONVÊNIO) */}
             <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.4 }} className="holo-card rounded-3xl p-6 bg-[#0a0510]/80 border border-yellow-500/20 relative group">
                 <div className="absolute inset-0 bg-gradient-to-tr from-yellow-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-700 pointer-events-none"></div>
                 <h2 className="text-sm font-black text-yellow-500 mb-5 flex items-center gap-2 tracking-wider uppercase"><Rocket size={16}/> Lançar Venda (Master)</h2>
+                
                 <form onSubmit={handleSubmit} className="space-y-4 font-mono">
-                    <div className="space-y-1"><label className="text-[9px] text-gray-500 uppercase font-bold ml-1">Cliente</label><input type="text" placeholder="Nome Completo" value={formData.client} onChange={e => setFormData({...formData, client: e.target.value})} className="w-full bg-[#151020] border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:border-yellow-500 outline-none transition-all" /></div>
-                    <div className="grid grid-cols-2 gap-3">
-                        <div className="space-y-1"><label className="text-[9px] text-gray-500 uppercase font-bold ml-1">Produto</label><select value={formData.product} onChange={e => setFormData({...formData, product: e.target.value})} className="w-full bg-[#151020] border border-white/10 rounded-xl px-4 py-3 text-xs text-white outline-none focus:border-yellow-500"><option>Empréstimo</option><option>Cartão RMC</option><option>Cartão Benefício</option></select></div>
-                        <div className="space-y-1"><label className="text-[9px] text-gray-500 uppercase font-bold ml-1">Valor</label><input type="number" step="0.01" placeholder="0.00" value={formData.value} onChange={e => setFormData({...formData, value: e.target.value})} className="w-full bg-[#151020] border border-white/10 rounded-xl px-4 py-3 text-sm font-bold text-white focus:border-green-500 outline-none" /></div>
+                    
+                    {/* Linha 1: Cliente */}
+                    <div className="space-y-1">
+                        <label className="text-[9px] text-gray-500 uppercase font-bold ml-1">Cliente</label>
+                        <input type="text" placeholder="Nome Completo" value={formData.client} onChange={e => setFormData({...formData, client: e.target.value})} className="w-full bg-[#151020] border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:border-yellow-500 outline-none transition-all" />
                     </div>
+
+                    {/* Linha 2: Convênio e Produto */}
+                    <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1">
+                            <label className="text-[9px] text-gray-500 uppercase font-bold ml-1">Convênio</label>
+                            <input type="text" placeholder="Ex: INSS" value={formData.agreement} onChange={e => setFormData({...formData, agreement: e.target.value})} className="w-full bg-[#151020] border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:border-yellow-500 outline-none transition-all" />
+                        </div>
+                        <div className="space-y-1">
+                            <label className="text-[9px] text-gray-500 uppercase font-bold ml-1">Produto</label>
+                            <select value={formData.product} onChange={e => setFormData({...formData, product: e.target.value})} className="w-full bg-[#151020] border border-white/10 rounded-xl px-4 py-3 text-xs text-white outline-none focus:border-yellow-500"><option>Empréstimo</option><option>Cartão RMC</option><option>Cartão Benefício</option></select>
+                        </div>
+                    </div>
+
+                    {/* Linha 3: Valor */}
+                    <div className="space-y-1">
+                        <label className="text-[9px] text-gray-500 uppercase font-bold ml-1">Valor (R$)</label>
+                        <input type="number" step="0.01" placeholder="0.00" value={formData.value} onChange={e => setFormData({...formData, value: e.target.value})} className="w-full bg-[#151020] border border-white/10 rounded-xl px-4 py-3 text-lg font-bold text-white focus:border-green-500 outline-none" />
+                    </div>
+
                     <button className="w-full bg-gradient-to-r from-yellow-600 to-orange-600 hover:from-yellow-500 hover:to-orange-500 text-black font-bold py-3 rounded-xl uppercase tracking-widest text-xs shadow-lg transition-all transform hover:-translate-y-1 active:scale-95 flex items-center justify-center gap-2">
                        <Rocket size={16}/> Registrar
                     </button>
                 </form>
             </motion.div>
 
-            {/* Centro de Duelos (Supervisor também joga!) */}
+            {/* DUELOS */}
             <AnimatePresence mode="wait">
             {activeDuel ? (
                  <motion.div initial={{ opacity: 0, scaleY: 0 }} animate={{ opacity: 1, scaleY: 1 }} className="holo-card rounded-3xl p-6 border border-red-500/30 relative overflow-hidden flex flex-col">
@@ -227,7 +242,6 @@ export const SupervisorDashboard = () => {
                         <h3 className="font-black text-red-500 text-xs flex items-center gap-2 uppercase tracking-widest animate-pulse"><Swords size={16} /> Duelo Ativo: {formatK(activeDuel.goal)}</h3>
                         <button onClick={() => setActiveDuel(null)} className="text-[10px] text-red-400 hover:text-white border border-red-900/50 px-2 py-1 rounded bg-red-950/30 flex items-center gap-1"><StopCircle size={10} /> PARAR</button>
                     </div>
-                    {/* Barras de Duelo */}
                     <div className="space-y-6">
                         <div>
                             <div className="flex justify-between text-[10px] font-bold mb-1 uppercase tracking-wider items-end"><span className="text-yellow-500 flex items-center gap-1"><User size={12}/> Você</span><span className="text-white font-mono">{formatCurrency(totalSales)}</span></div>
@@ -265,9 +279,8 @@ export const SupervisorDashboard = () => {
             </AnimatePresence>
         </div>
 
-        {/* === COLUNA DIREITA: SUPERVISÃO (Abas) === */}
+        {/* COLUNA DIREITA */}
         <div className="col-span-12 lg:col-span-8 h-full flex flex-col">
-             {/* Navegação de Abas */}
              <div className="flex gap-4 mb-4 border-b border-white/5 pb-1">
                 <button onClick={() => setActiveTab('team')} className={`pb-2 text-xs font-bold uppercase tracking-widest transition-all flex items-center gap-2 ${activeTab === 'team' ? 'text-yellow-500 border-b-2 border-yellow-500' : 'text-gray-500 hover:text-white'}`}>
                     <LayoutDashboard size={14}/> Visão Global (Raio-X)
@@ -279,7 +292,6 @@ export const SupervisorDashboard = () => {
 
              <div className="flex-1 bg-[#0a0510]/80 backdrop-blur-xl border border-white/10 rounded-3xl overflow-hidden shadow-2xl relative">
                 {activeTab === 'team' ? (
-                    // VISÃO DE EQUIPE (GOD MODE)
                     <div className="h-full flex flex-col">
                         <div className="p-4 border-b border-white/5 bg-[#151020]/50 flex justify-between items-center">
                             <div className="relative w-64">
@@ -293,7 +305,6 @@ export const SupervisorDashboard = () => {
                         </div>
                         <div className="flex-1 overflow-y-auto p-2 custom-scrollbar space-y-2">
                             {filteredTeam.map((agent, index) => {
-                                // Lógica de Progresso Visual
                                 const agentTotal = agent.sales_total || 0;
                                 const agentNextGoal = GOALS.find(g => g > agentTotal) || GOALS[GOALS.length - 1];
                                 const agentProgress = Math.min(100, (agentTotal / agentNextGoal) * 100);
@@ -318,7 +329,6 @@ export const SupervisorDashboard = () => {
                                                 <p className="text-[9px] text-gray-600">Meta: {formatK(agentNextGoal)}</p>
                                             </div>
                                         </div>
-                                        {/* Barra de Progresso do Agente */}
                                         <div className="w-full h-1.5 bg-black rounded-full overflow-hidden flex items-center">
                                             <div className={`h-full rounded-full ${isLeader ? 'bg-yellow-500' : 'bg-purple-600'}`} style={{ width: `${agentProgress}%` }}></div>
                                         </div>
@@ -328,15 +338,15 @@ export const SupervisorDashboard = () => {
                         </div>
                     </div>
                 ) : (
-                    // MEU HISTÓRICO (Tabela Simples)
                     <div className="h-full overflow-auto p-4 custom-scrollbar">
                          <table className="w-full text-left text-sm border-separate border-spacing-y-2">
-                            <thead className="text-[9px] text-gray-500 uppercase tracking-widest"><tr><th className="p-2">Data</th><th className="p-2">Cliente</th><th className="p-2">Produto</th><th className="p-2 text-right">Valor</th></tr></thead>
+                            <thead className="text-[9px] text-gray-500 uppercase tracking-widest"><tr><th className="p-2">Data</th><th className="p-2">Cliente</th><th className="p-2">Convênio</th><th className="p-2">Produto</th><th className="p-2 text-right">Valor</th></tr></thead>
                             <tbody className="font-mono text-xs">
                                 {sales.map(sale => (
                                     <tr key={sale.id} className="bg-white/5 hover:bg-white/10">
                                         <td className="p-3 rounded-l-lg text-gray-400">{new Date(sale.created_at).toLocaleDateString('pt-BR')}</td>
                                         <td className="p-3 text-white font-sans font-bold">{sale.client_name}</td>
+                                        <td className="p-3 text-gray-300">{sale.agreement || '-'}</td>
                                         <td className="p-3 text-purple-400">{sale.product}</td>
                                         <td className="p-3 rounded-r-lg text-right text-green-400 font-bold">{formatCurrency(sale.value)}</td>
                                     </tr>
