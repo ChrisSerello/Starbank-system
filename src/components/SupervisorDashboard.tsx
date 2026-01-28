@@ -1,113 +1,101 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Rocket, Target, DollarSign, Zap, TrendingUp, LogOut, User, Cpu, Activity, Swords, Search, Crown, Trophy, LayoutDashboard, Eye, ShieldCheck, Database, Server } from 'lucide-react';
+import { Rocket, Target, DollarSign, Zap, TrendingUp, LogOut, User, Cpu, Activity, Swords, Search, Crown, Trophy, LayoutDashboard, Eye, ShieldCheck, Database, Server, BarChart3, History, CheckCircle2, Crosshair, StopCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../supabase';
 
-// --- COMPONENTES AUXILIARES SUPREMOS ---
+// --- CONFIGURAÇÃO DE METAS ---
+const GOALS = [50000, 80000, 100000, 150000];
 
-// Gráfico de Fundo (Mais sutil e elegante)
-const SupremeChartBg = () => (
-  <div className="absolute bottom-0 left-0 right-0 h-24 opacity-10 pointer-events-none overflow-hidden rounded-b-3xl">
-    <svg viewBox="0 0 100 40" className="w-full h-full" preserveAspectRatio="none">
-      <path d="M0,40 Q25,35 50,20 T100,10 V40 H0 Z" fill="url(#grad-supreme)" />
-      <defs>
-        <linearGradient id="grad-supreme" x1="0%" y1="0%" x2="0%" y2="100%">
-          <stop offset="0%" style={{ stopColor: '#ffd700', stopOpacity: 0.5 }} />
-          <stop offset="100%" style={{ stopColor: '#4b0082', stopOpacity: 0 }} />
-        </linearGradient>
-      </defs>
-    </svg>
-  </div>
-);
+// --- COMPONENTES AUXILIARES ---
+const MiniHoloChart = ({ color }: { color: string }) => {
+  const pathColor = color === 'gold' ? '#ffd700' : color === 'purple' ? '#a855f7' : '#22c55e';
+  return (
+    <div className="absolute bottom-0 left-0 right-0 h-16 opacity-20 pointer-events-none overflow-hidden rounded-b-2xl">
+      <svg viewBox="0 0 100 40" className="w-full h-full" preserveAspectRatio="none">
+        <path d="M0,30 Q25,10 50,30 T100,30 V40 H0 Z" fill={`url(#grad-${color})`} stroke={pathColor} strokeWidth="0.5" />
+        <defs><linearGradient id={`grad-${color}`}><stop offset="0%" style={{ stopColor: pathColor, stopOpacity: 0.4 }} /><stop offset="100%" style={{ stopColor: pathColor, stopOpacity: 0 }} /></linearGradient></defs>
+      </svg>
+    </div>
+  );
+};
 
-// Card KPI Supremo
-const SupremeKpi = ({ title, value, subtext, icon: Icon, delay }: any) => (
-    <motion.div 
-        initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay }}
-        className="relative group overflow-hidden rounded-3xl p-1 bg-gradient-to-br from-white/10 to-transparent border border-white/5 hover:border-yellow-500/30 transition-all duration-500"
-    >
-        <div className="absolute inset-0 bg-[#0a0510] rounded-3xl m-[1px]"></div>
-        <SupremeChartBg />
-        
-        <div className="relative z-10 p-6">
-            <div className="flex justify-between items-start mb-4">
-                <div className="p-3 rounded-2xl bg-gradient-to-br from-[#1a1030] to-[#0a0510] border border-white/5 shadow-[inset_0_0_15px_rgba(0,0,0,1)] group-hover:border-yellow-500/20 transition-colors">
-                    <Icon className="w-6 h-6 text-yellow-500" />
-                </div>
-                <div className="flex flex-col items-end">
-                    <span className="text-[9px] font-mono text-purple-300 uppercase tracking-widest bg-purple-900/20 px-2 py-1 rounded border border-purple-500/20">Live Data</span>
-                </div>
-            </div>
-            <h3 className="text-gray-500 text-[10px] font-bold uppercase tracking-[0.3em] mb-1">{title}</h3>
-            <div className="text-3xl md:text-4xl font-black text-white font-sans tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white to-gray-400 group-hover:to-yellow-200 transition-all">{value}</div>
-            {subtext && <p className="text-xs text-gray-500 font-mono mt-2 flex items-center gap-1"><div className="w-1 h-1 rounded-full bg-green-500"></div> {subtext}</p>}
+const KpiCardHolo = ({ title, value, icon: Icon, colorName, delay }: any) => {
+    const theme = colorName === 'gold' ? 'text-yellow-400 shadow-yellow-500/20' : colorName === 'purple' ? 'text-purple-400 shadow-purple-500/20' : 'text-green-400 shadow-green-500/20';
+    return (
+    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay }} className={`relative group holo-card rounded-2xl p-6 transition-all duration-500 hover:scale-[1.02] ${theme} border border-white/5 bg-[#0a0510]/60`}>
+        <MiniHoloChart color={colorName} />
+        <div className="relative z-10 flex justify-between items-start mb-4">
+            <div className={`p-3 rounded-xl bg-[#1a1025] border border-white/10 shadow-inner ${colorName === 'gold' ? 'text-yellow-500' : colorName === 'purple' ? 'text-purple-500' : 'text-green-500'}`}><Icon className="w-6 h-6" /></div>
+            {colorName === 'gold' && <Crown size={12} className="text-yellow-500 animate-pulse"/>}
         </div>
+        <h3 className="relative z-10 text-gray-500 text-[10px] font-bold uppercase tracking-[0.2em] mb-1">{title}</h3>
+        <div className="relative z-10 text-2xl md:text-3xl font-black text-white font-sans">{value}</div>
     </motion.div>
-);
+    );
+};
 
 export const SupervisorDashboard = () => {
   const navigate = useNavigate();
   
-  // DADOS REAIS
-  const [sales, setSales] = useState<any[]>([]); // Minhas vendas
-  const [userProfile, setUserProfile] = useState<any>(null); // Meu perfil
-  const [teamAgents, setTeamAgents] = useState<any[]>([]); // Todos os agentes (ranking)
-  const [loading, setLoading] = useState(true);
-
-  // INPUT DE VENDA (Igual ao Operador, mas visualmente atualizado)
+  // DADOS
+  const [sales, setSales] = useState<any[]>([]);
+  const [userProfile, setUserProfile] = useState<any>(null);
+  const [teamAgents, setTeamAgents] = useState<any[]>([]);
   const [formData, setFormData] = useState({ client: '', agreement: '', product: 'Empréstimo', value: '' });
+
+  // ESTADOS DE INTERFACE
+  const [activeTab, setActiveTab] = useState<'history' | 'team'>('team'); // Padrão: Visão de Equipe
   const [searchQuery, setSearchQuery] = useState('');
 
-  // 1. CARREGAMENTO INICIAL
+  // ESTADOS DO DUELO (Sim, supervisor também duela!)
+  const [selectedOpponentId, setSelectedOpponentId] = useState<string | null>(null);
+  const [selectedGoal, setSelectedGoal] = useState<number>(50000);
+  const [activeDuel, setActiveDuel] = useState<{opponentName: string, opponentSales: number, goal: number} | null>(null);
+  const [sentNotification, setSentNotification] = useState<{show: boolean, name: string}>({ show: false, name: '' });
+
+  // CARREGAMENTO
   useEffect(() => {
-    const initSystem = async () => {
+    const init = async () => {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) { navigate('/'); return; }
 
-        // Carrega vendas pessoais
-        const { data: mySales } = await supabase.from('sales').select('*').eq('user_id', user.id);
-        if (mySales) setSales(mySales);
-
-        // Carrega perfil
+        // Carregar Perfil
         const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).single();
         setUserProfile(profile);
 
-        // Carrega Time
-        fetchTeamData();
-        setLoading(false);
-    };
-    initSystem();
+        // Carregar Minhas Vendas
+        const { data: mySales } = await supabase.from('sales').select('*').eq('user_id', user.id).order('created_at', { ascending: false });
+        if (mySales) setSales(mySales);
 
-    // Realtime Updates
-    const sub = supabase.channel('supervisor-room')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, fetchTeamData)
-        .subscribe();
+        // Carregar Time Completo (Para Ranking e Duelos)
+        fetchTeamData(user.id);
+    };
+    init();
+
+    // Realtime: Atualizar ranking se alguém vender
+    const sub = supabase.channel('supervisor-global').on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => {
+        if(userProfile) fetchTeamData(userProfile.id);
+    }).subscribe();
 
     return () => { supabase.removeChannel(sub); }
-  }, [navigate]);
+  }, [navigate, userProfile?.id]);
 
-  const fetchTeamData = async () => {
+  const fetchTeamData = async (myId: string) => {
+      // Pega todos (inclusive eu, para o ranking)
       const { data } = await supabase.from('profiles').select('*').order('sales_total', { ascending: false });
       if (data) setTeamAgents(data);
   }
 
-  // Lógica de Metas Pessoais
-  const totalMySales = useMemo(() => sales.reduce((acc, curr) => acc + Number(curr.value), 0), [sales]);
-  const myCommission = totalMySales * (totalMySales > 100000 ? 0.015 : 0.01);
-  
-  // Lógica da Equipe
-  const totalTeamSales = useMemo(() => teamAgents.reduce((acc, curr) => acc + (curr.sales_total || 0), 0), [teamAgents]);
-  
-  // Filtragem e Ranking
-  const filteredAgents = teamAgents.filter(a => a.name.toLowerCase().includes(searchQuery.toLowerCase()));
-  const topAgent = teamAgents.length > 0 && teamAgents[0].sales_total > 0 ? teamAgents[0] : null;
-  const runnerUp = teamAgents.length > 1 && teamAgents[1].sales_total > 0 ? teamAgents[1] : null;
-  const hasActiveDuel = topAgent && runnerUp; // Só exibe duelo se houver pelo menos 2 pessoas com vendas
-
+  // CÁLCULOS PESSOAIS
+  const totalSales = useMemo(() => sales.reduce((acc, curr) => acc + Number(curr.value), 0), [sales]);
+  const nextGoal = GOALS.find(g => g > totalSales) || GOALS[GOALS.length - 1];
+  const progressPercent = Math.min(100, (totalSales / nextGoal) * 100);
+  const commission = totalSales * (totalSales > 100000 ? 0.015 : 0.01);
   const formatCurrency = (val: number) => val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  const formatK = (val: number) => `R$ ${val / 1000}k`;
 
-  // AÇÃO: LANÇAR VENDA (SUPERVISOR TAMBÉM VENDE)
+  // AÇÕES
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.value || !userProfile) return;
@@ -124,11 +112,28 @@ export const SupervisorDashboard = () => {
     if (!error && data) {
         setSales([data[0], ...sales]);
         setFormData({ ...formData, client: '', value: '' });
-        // Atualiza meu total na tabela pública para o ranking
-        await supabase.from('profiles').update({ sales_total: totalMySales + val }).eq('id', userProfile.id);
-        fetchTeamData();
+        // Atualiza meu total no banco
+        await supabase.from('profiles').update({ sales_total: totalSales + val }).eq('id', userProfile.id);
+        fetchTeamData(userProfile.id);
     }
   };
+
+  const handleStartDuel = () => {
+    if (selectedOpponentId) {
+        const opponent = teamAgents.find(op => op.id === selectedOpponentId);
+        const opponentName = opponent?.name || 'Oponente';
+        const opponentSales = opponent?.sales_total || 0; 
+        
+        setSentNotification({ show: true, name: opponentName });
+        setTimeout(() => setSentNotification({ show: false, name: '' }), 3000);
+        setActiveDuel({ opponentName, opponentSales, goal: selectedGoal });
+    }
+  };
+
+  // FILTRO DO TIME (Raio-X)
+  const filteredTeam = teamAgents.filter(agent => 
+      agent.name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   return (
     <div className="min-h-screen relative font-sans text-white overflow-hidden bg-[#020005]">
@@ -136,20 +141,24 @@ export const SupervisorDashboard = () => {
       <div className="fixed inset-0 bg-[size:400%_400%] animate-nebula-flow bg-gradient-to-br from-[#0f0014] via-[#05000a] to-[#000000] -z-20"></div>
       <div className="fixed inset-0 cyber-grid opacity-10 mix-blend-screen -z-10"></div>
       <div className="scanline opacity-20"></div>
-      
-      {/* Header Supremo */}
-      <header className="fixed top-0 w-full z-50 px-8 py-4 bg-[#0a0510]/90 backdrop-blur-xl border-b border-white/5 flex justify-between items-center shadow-2xl">
+
+      <motion.div initial={{ y: 100, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 1 }} className="fixed bottom-5 right-5 w-32 h-32 pointer-events-none z-50 hidden lg:block mix-blend-screen filter drop-shadow-[0_0_20px_rgba(255,215,0,0.4)]">
+        <img src="https://cdn-icons-png.flaticon.com/512/2026/2026465.png" alt="Mascote" className="w-full h-full object-contain" style={{filter: 'hue-rotate(45deg)'}} />
+      </motion.div>
+
+      {/* HEADER SUPREMO */}
+      <header className="fixed top-0 w-full z-50 px-6 py-3 bg-[#0a0510]/90 backdrop-blur-xl border-b border-yellow-500/10 flex justify-between items-center shadow-2xl">
         <div className="flex items-center gap-4">
             <div className="relative group">
                 <div className="absolute inset-0 bg-yellow-500 blur-lg opacity-20 group-hover:opacity-40 transition-opacity"></div>
-                <div className="relative w-12 h-12 bg-gradient-to-br from-[#1a1030] to-black rounded-xl border border-yellow-500/30 flex items-center justify-center">
-                    <ShieldCheck className="text-yellow-500 w-6 h-6" />
+                <div className="relative w-10 h-10 bg-gradient-to-br from-[#1a1030] to-black rounded-xl border border-yellow-500/30 flex items-center justify-center">
+                    <ShieldCheck className="text-yellow-500 w-5 h-5" />
                 </div>
             </div>
             <div>
-                <h1 className="text-2xl font-black tracking-[0.2em] text-white leading-none">STAR<span className="text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-purple-600">BANK</span></h1>
+                <h1 className="text-xl font-black tracking-[0.2em] text-white leading-none">STAR<span className="text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-purple-600">BANK</span></h1>
                 <p className="text-[9px] text-yellow-600/80 font-mono tracking-[0.4em] uppercase mt-1 flex items-center gap-2">
-                    <span className="w-1 h-1 bg-yellow-500 rounded-full animate-pulse"></span> Supreme Access
+                    <span className="w-1.5 h-1.5 bg-yellow-500 rounded-full animate-pulse"></span> Supreme Access
                 </p>
             </div>
         </div>
@@ -158,172 +167,186 @@ export const SupervisorDashboard = () => {
                 <div className="text-xs font-bold text-white flex items-center justify-end gap-2">
                     {userProfile?.name || 'Supervisor'} <Crown size={14} className="text-yellow-500 fill-yellow-500"/>
                 </div>
-                <div className="text-[9px] text-gray-500 font-mono">ID: SUPER-01 • <span className="text-green-500">SECURE</span></div>
+                <div className="text-[9px] text-gray-500 font-mono">GOD MODE ENABLED</div>
             </div>
-            <button onClick={() => navigate('/')} className="p-3 rounded-xl bg-white/5 hover:bg-red-500/20 text-gray-400 hover:text-red-400 transition-all border border-white/5 hover:border-red-500/30">
+            <button onClick={() => navigate('/')} className="p-2 rounded-lg bg-white/5 hover:bg-red-900/20 text-gray-400 hover:text-red-400 transition-all border border-white/5 hover:border-red-500/30">
                 <LogOut size={18} />
             </button>
         </div>
       </header>
 
-      <main className="pt-32 px-8 pb-12 max-w-[1800px] mx-auto grid grid-cols-12 gap-8 relative z-10 h-[calc(100vh-100px)] overflow-y-auto custom-scrollbar">
+      <main className="pt-24 px-6 pb-10 max-w-[1800px] mx-auto grid grid-cols-12 gap-6 relative z-10 h-screen overflow-y-auto custom-scrollbar">
         
-        {/* === LINHA 1: COMANDO CENTRAL (Formulário + KPIs) === */}
-        <div className="col-span-12 lg:col-span-8 flex flex-col gap-6">
+        {/* === LINHA 1: KPIS PESSOAIS (Igual Operador) === */}
+        <div className="col-span-12 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+            <KpiCardHolo title="Suas Vendas" value={formatCurrency(totalSales)} icon={Target} colorName="gold" delay={0.1} />
+            <KpiCardHolo title="Sua Comissão" value={formatCurrency(commission)} icon={DollarSign} colorName="green" delay={0.2} />
             
-            {/* Cards de Status */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <SupremeKpi title="Performance Pessoal" value={formatCurrency(totalMySales)} subtext="Suas Vendas" icon={User} delay={0.1} />
-                <SupremeKpi title="Equipe Total" value={formatCurrency(totalTeamSales)} subtext={`${teamAgents.length} Agentes Ativos`} icon={Database} delay={0.2} />
-                <SupremeKpi title="Comissão Master" value={formatCurrency(myCommission)} subtext="Previsão Atual" icon={DollarSign} delay={0.3} />
-            </div>
-
-            {/* Input de Vendas (Estilo Terminal) */}
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }} className="relative group rounded-3xl p-[1px] bg-gradient-to-r from-yellow-500/20 via-purple-500/20 to-transparent">
-                <div className="bg-[#08040d] rounded-3xl p-6 relative overflow-hidden">
-                    <div className="absolute top-0 right-0 p-4 opacity-5"><Rocket size={100}/></div>
-                    <h3 className="text-white font-bold text-sm mb-6 flex items-center gap-2 uppercase tracking-widest"><Rocket size={16} className="text-purple-500"/> Terminal de Lançamento (Master)</h3>
-                    
-                    <form onSubmit={handleSubmit} className="grid grid-cols-12 gap-4 items-end">
-                        <div className="col-span-4">
-                            <label className="text-[9px] text-gray-500 uppercase font-bold ml-2 mb-1 block">Cliente</label>
-                            <input type="text" placeholder="Nome Completo" className="w-full bg-[#151020] border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:border-purple-500 focus:shadow-[0_0_20px_rgba(168,85,247,0.2)] outline-none transition-all" value={formData.client} onChange={e => setFormData({...formData, client: e.target.value})} />
-                        </div>
-                        <div className="col-span-2">
-                            <label className="text-[9px] text-gray-500 uppercase font-bold ml-2 mb-1 block">Produto</label>
-                            <select className="w-full bg-[#151020] border border-white/10 rounded-xl px-4 py-3 text-sm text-white outline-none focus:border-purple-500 appearance-none" value={formData.product} onChange={e => setFormData({...formData, product: e.target.value})}>
-                                <option>Empréstimo</option><option>Cartão RMC</option><option>Cartão Benefício</option>
-                            </select>
-                        </div>
-                        <div className="col-span-2">
-                            <label className="text-[9px] text-gray-500 uppercase font-bold ml-2 mb-1 block">Convênio</label>
-                            <input type="text" placeholder="INSS" className="w-full bg-[#151020] border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:border-purple-500 outline-none" value={formData.agreement} onChange={e => setFormData({...formData, agreement: e.target.value})} />
-                        </div>
-                        <div className="col-span-2">
-                            <label className="text-[9px] text-gray-500 uppercase font-bold ml-2 mb-1 block">Valor (R$)</label>
-                            <input type="number" step="0.01" placeholder="0.00" className="w-full bg-[#151020] border border-white/10 rounded-xl px-4 py-3 text-sm text-white font-bold focus:border-green-500 focus:shadow-[0_0_20px_rgba(34,197,94,0.2)] outline-none" value={formData.value} onChange={e => setFormData({...formData, value: e.target.value})} />
-                        </div>
-                        <div className="col-span-2">
-                            <button className="w-full bg-gradient-to-r from-purple-700 to-indigo-700 hover:from-purple-600 hover:to-indigo-600 text-white font-bold py-3 rounded-xl shadow-lg transition-all transform hover:-translate-y-1 active:scale-95 flex items-center justify-center">
-                                <Rocket size={18} />
-                            </button>
-                        </div>
-                    </form>
+            <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.3 }} className="sm:col-span-2 lg:col-span-2 holo-card rounded-2xl p-6 bg-gradient-to-r from-[#1a1025] to-transparent border border-purple-500/30 relative overflow-hidden">
+                <div className="absolute right-0 top-0 opacity-20"><Zap size={100} className="text-purple-500"/></div>
+                <div className="relative z-10">
+                    <div className="flex justify-between items-center mb-2">
+                        <h3 className="text-purple-400 text-[10px] font-bold uppercase tracking-[0.2em]">Meta Pessoal Atual</h3>
+                        <span className="text-white font-mono font-bold">{progressPercent.toFixed(0)}%</span>
+                    </div>
+                    <div className="flex items-end gap-2 mb-3">
+                         <span className="text-3xl font-black text-white">{formatK(nextGoal)}</span>
+                         <span className="text-xs text-gray-400 mb-1 font-mono">Próximo Nível</span>
+                    </div>
+                    <div className="h-3 bg-black/50 rounded-full overflow-hidden border border-white/10">
+                        <motion.div className="h-full bg-gradient-to-r from-purple-600 to-yellow-500" initial={{ width: 0 }} animate={{ width: `${progressPercent}%` }} />
+                    </div>
                 </div>
             </motion.div>
-
-            {/* === ÁREA DO DUELO (CONDICIONAL) === */}
-            {hasActiveDuel ? (
-                <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="relative overflow-hidden rounded-3xl border border-yellow-500/20 bg-gradient-to-b from-[#1a1005] to-[#050200] p-8">
-                    <div className="flex justify-between items-center mb-8">
-                        <h3 className="text-yellow-500 font-black italic text-lg tracking-widest flex items-center gap-3"><Swords size={20}/> CLASH OF LEADERS</h3>
-                        <span className="text-[9px] font-mono text-gray-500 border border-gray-800 px-2 py-1 rounded">LIVE UPDATE</span>
-                    </div>
-                    
-                    <div className="flex items-center justify-between relative z-10">
-                        {/* Líder */}
-                        <div className="text-left w-1/3">
-                            <div className="flex items-center gap-3 mb-2">
-                                <div className="w-12 h-12 rounded-full border-2 border-yellow-500 bg-yellow-900/20 flex items-center justify-center text-yellow-500 shadow-[0_0_20px_rgba(234,179,8,0.4)]"><Crown size={24}/></div>
-                                <div>
-                                    <p className="text-yellow-500 font-bold text-lg leading-none">{topAgent.name}</p>
-                                    <p className="text-[10px] text-gray-500 uppercase tracking-wider">Top 1 Global</p>
-                                </div>
-                            </div>
-                            <div className="text-3xl font-mono text-white">{formatCurrency(topAgent.sales_total)}</div>
-                        </div>
-
-                        {/* VS */}
-                        <div className="text-6xl font-black italic text-white/5 absolute left-1/2 -translate-x-1/2 top-1/2 -translate-y-1/2 pointer-events-none">VS</div>
-
-                        {/* Desafiante */}
-                        <div className="text-right w-1/3">
-                            <div className="flex items-center justify-end gap-3 mb-2">
-                                <div>
-                                    <p className="text-gray-300 font-bold text-lg leading-none">{runnerUp.name}</p>
-                                    <p className="text-[10px] text-gray-500 uppercase tracking-wider">Top 2 (Desafiante)</p>
-                                </div>
-                                <div className="w-10 h-10 rounded-full border border-gray-600 bg-gray-800/50 flex items-center justify-center text-gray-400"><User size={20}/></div>
-                            </div>
-                            <div className="text-2xl font-mono text-gray-400">{formatCurrency(runnerUp.sales_total)}</div>
-                        </div>
-                    </div>
-
-                    {/* Barra de Domínio */}
-                    <div className="mt-8 relative h-3 bg-[#0a0a0a] rounded-full overflow-hidden border border-white/5">
-                        <div className="absolute left-0 top-0 h-full bg-gradient-to-r from-yellow-600 to-yellow-400 shadow-[0_0_20px_rgba(234,179,8,0.5)]" style={{ width: `${(topAgent.sales_total / ((topAgent.sales_total + runnerUp.sales_total) || 1)) * 100}%` }}></div>
-                    </div>
-                </motion.div>
-            ) : (
-                // EMPTY STATE DO DUELO
-                <div className="rounded-3xl border border-dashed border-white/10 bg-white/5 p-8 flex flex-col items-center justify-center text-center h-[250px]">
-                    <Swords size={40} className="text-gray-600 mb-4" />
-                    <h3 className="text-gray-400 font-bold uppercase tracking-widest text-sm">Aguardando Dados de Campo</h3>
-                    <p className="text-gray-600 text-xs max-w-md mt-2">O sistema de duelo tático será ativado automaticamente assim que dois ou mais agentes registrarem vendas no banco de dados.</p>
-                </div>
-            )}
         </div>
 
-        {/* === LINHA 2: RANKING GLOBAL (COLUNA DIREITA) === */}
-        <div className="col-span-12 lg:col-span-4 h-full flex flex-col">
-            <div className="bg-[#0a0510]/80 backdrop-blur-xl border border-white/10 rounded-3xl flex-1 flex flex-col overflow-hidden shadow-2xl">
-                <div className="p-6 border-b border-white/5 bg-gradient-to-r from-purple-900/20 to-transparent">
-                    <h3 className="text-white font-black uppercase tracking-[0.2em] text-sm flex items-center gap-2">
-                        <Trophy className="text-yellow-500" size={16} /> Elite Ranking
-                    </h3>
-                    
-                    {/* Barra de Pesquisa */}
-                    <div className="mt-4 relative">
-                        <Search className="absolute left-3 top-2.5 text-gray-500 w-4 h-4" />
-                        <input 
-                            type="text" 
-                            placeholder="Localizar Agente..." 
-                            className="w-full bg-black/40 border border-white/10 rounded-xl pl-10 pr-4 py-2 text-xs text-white focus:border-purple-500 outline-none transition-all"
-                            value={searchQuery}
-                            onChange={e => setSearchQuery(e.target.value)}
-                        />
+        {/* === COLUNA ESQUERDA: AÇÃO (INPUT + DUELO) === */}
+        <div className="col-span-12 lg:col-span-4 space-y-6">
+            
+            {/* Input de Venda (Estilo Gold) */}
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.4 }} className="holo-card rounded-3xl p-6 bg-[#0a0510]/80 border border-yellow-500/20 relative group">
+                <div className="absolute inset-0 bg-gradient-to-tr from-yellow-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-700 pointer-events-none"></div>
+                <h2 className="text-sm font-black text-yellow-500 mb-5 flex items-center gap-2 tracking-wider uppercase"><Rocket size={16}/> Lançar Venda (Master)</h2>
+                <form onSubmit={handleSubmit} className="space-y-4 font-mono">
+                    <div className="space-y-1"><label className="text-[9px] text-gray-500 uppercase font-bold ml-1">Cliente</label><input type="text" placeholder="Nome Completo" value={formData.client} onChange={e => setFormData({...formData, client: e.target.value})} className="w-full bg-[#151020] border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:border-yellow-500 outline-none transition-all" /></div>
+                    <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1"><label className="text-[9px] text-gray-500 uppercase font-bold ml-1">Produto</label><select value={formData.product} onChange={e => setFormData({...formData, product: e.target.value})} className="w-full bg-[#151020] border border-white/10 rounded-xl px-4 py-3 text-xs text-white outline-none focus:border-yellow-500"><option>Empréstimo</option><option>Cartão RMC</option><option>Cartão Benefício</option></select></div>
+                        <div className="space-y-1"><label className="text-[9px] text-gray-500 uppercase font-bold ml-1">Valor</label><input type="number" step="0.01" placeholder="0.00" value={formData.value} onChange={e => setFormData({...formData, value: e.target.value})} className="w-full bg-[#151020] border border-white/10 rounded-xl px-4 py-3 text-sm font-bold text-white focus:border-green-500 outline-none" /></div>
                     </div>
-                </div>
+                    <button className="w-full bg-gradient-to-r from-yellow-600 to-orange-600 hover:from-yellow-500 hover:to-orange-500 text-black font-bold py-3 rounded-xl uppercase tracking-widest text-xs shadow-lg transition-all transform hover:-translate-y-1 active:scale-95 flex items-center justify-center gap-2">
+                       <Rocket size={16}/> Registrar
+                    </button>
+                </form>
+            </motion.div>
 
-                <div className="flex-1 overflow-y-auto p-2 custom-scrollbar space-y-2">
-                    <AnimatePresence>
-                        {filteredAgents.length === 0 ? (
-                            <div className="text-center py-10 text-gray-600 text-xs uppercase tracking-widest">Nenhum agente encontrado</div>
-                        ) : (
-                            filteredAgents.map((agent, index) => (
-                                <motion.div 
-                                    key={agent.id}
-                                    initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0, transition: { delay: index * 0.05 } }}
-                                    className={`p-4 rounded-2xl flex items-center justify-between border ${index === 0 ? 'bg-gradient-to-r from-yellow-900/10 to-transparent border-yellow-500/20' : 'bg-white/5 border-transparent hover:bg-white/10'} transition-all`}
-                                >
-                                    <div className="flex items-center gap-4">
-                                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-black text-sm ${
-                                            index === 0 ? 'bg-yellow-500 text-black shadow-[0_0_15px_rgba(234,179,8,0.5)]' : 
-                                            index === 1 ? 'bg-gray-400 text-black' : 
-                                            index === 2 ? 'bg-orange-700 text-white' : 'bg-gray-800 text-gray-500'
-                                        }`}>
-                                            {index + 1}
+            {/* Centro de Duelos (Supervisor também joga!) */}
+            <AnimatePresence mode="wait">
+            {activeDuel ? (
+                 <motion.div initial={{ opacity: 0, scaleY: 0 }} animate={{ opacity: 1, scaleY: 1 }} className="holo-card rounded-3xl p-6 border border-red-500/30 relative overflow-hidden flex flex-col">
+                    <div className="flex justify-between items-center mb-6">
+                        <h3 className="font-black text-red-500 text-xs flex items-center gap-2 uppercase tracking-widest animate-pulse"><Swords size={16} /> Duelo Ativo: {formatK(activeDuel.goal)}</h3>
+                        <button onClick={() => setActiveDuel(null)} className="text-[10px] text-red-400 hover:text-white border border-red-900/50 px-2 py-1 rounded bg-red-950/30 flex items-center gap-1"><StopCircle size={10} /> PARAR</button>
+                    </div>
+                    {/* Barras de Duelo */}
+                    <div className="space-y-6">
+                        <div>
+                            <div className="flex justify-between text-[10px] font-bold mb-1 uppercase tracking-wider items-end"><span className="text-yellow-500 flex items-center gap-1"><User size={12}/> Você</span><span className="text-white font-mono">{formatCurrency(totalSales)}</span></div>
+                            <div className="h-3 bg-black rounded-full overflow-hidden border border-yellow-500/30"><motion.div className="h-full bg-gradient-to-r from-yellow-600 to-yellow-400" initial={{ width: 0 }} animate={{ width: `${Math.min(100, (totalSales / activeDuel.goal) * 100)}%` }} /></div>
+                        </div>
+                        <div className="text-center text-xs font-black text-gray-600 italic">VS</div>
+                        <div>
+                            <div className="flex justify-between text-[10px] font-bold mb-1 uppercase tracking-wider items-end"><span className="text-red-500 flex items-center gap-1"><Cpu size={12}/> {activeDuel.opponentName}</span><span className="text-gray-400 font-mono">{formatCurrency(activeDuel.opponentSales)}</span></div>
+                            <div className="h-3 bg-black rounded-full overflow-hidden border border-red-500/30"><motion.div className="h-full bg-gradient-to-r from-red-900 to-red-500" initial={{ width: 0 }} animate={{ width: `${Math.min(100, (activeDuel.opponentSales / activeDuel.goal) * 100)}%` }} /></div>
+                        </div>
+                    </div>
+                 </motion.div>
+            ) : (
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="holo-card rounded-3xl p-1 overflow-hidden flex flex-col h-[300px]">
+                    <div className="p-4 bg-[#151020] border-b border-white/5 flex justify-between items-center">
+                        <h3 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2"><Swords size={14} className="text-purple-400"/> Iniciar Duelo</h3>
+                        <div className="flex gap-1">{GOALS.map(g => (<button key={g} onClick={() => setSelectedGoal(g)} className={`text-[9px] px-2 py-1 rounded border ${selectedGoal === g ? 'bg-purple-600 text-white border-purple-400' : 'text-gray-500 border-transparent hover:border-purple-500/30'}`}>{g/1000}k</button>))}</div>
+                    </div>
+                    <div className="flex-1 overflow-y-auto p-2 space-y-2 custom-scrollbar bg-[#0a0510]/50">
+                        {teamAgents.filter(a => a.id !== userProfile?.id).map(agent => (
+                            <div key={agent.id} onClick={() => setSelectedOpponentId(agent.id)} className={`p-2 rounded-xl flex items-center justify-between cursor-pointer border transition-all ${selectedOpponentId === agent.id ? 'bg-purple-900/30 border-purple-500/50' : 'bg-transparent border-transparent hover:bg-white/5'}`}>
+                                <div className="flex items-center gap-3">
+                                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center border ${selectedOpponentId === agent.id ? 'border-purple-400 text-purple-400' : 'border-white/10 text-gray-500'}`}><User size={14}/></div>
+                                    <div><p className={`text-xs font-bold ${selectedOpponentId === agent.id ? 'text-white' : 'text-gray-400'}`}>{agent.name}</p><p className="text-[9px] text-gray-600">{formatCurrency(agent.sales_total || 0)}</p></div>
+                                </div>
+                                {selectedOpponentId === agent.id && <Crosshair size={16} className="text-purple-400 animate-spin-slow"/>}
+                            </div>
+                        ))}
+                    </div>
+                    <div className="p-3 bg-[#151020] border-t border-white/5">
+                        <button onClick={handleStartDuel} disabled={!selectedOpponentId} className={`w-full py-2 rounded-lg text-xs font-bold uppercase tracking-widest ${selectedOpponentId ? 'bg-purple-600 text-white shadow-lg' : 'bg-white/5 text-gray-600 cursor-not-allowed'}`}>Desafiar</button>
+                    </div>
+                </motion.div>
+            )}
+            </AnimatePresence>
+        </div>
+
+        {/* === COLUNA DIREITA: SUPERVISÃO (Abas) === */}
+        <div className="col-span-12 lg:col-span-8 h-full flex flex-col">
+             {/* Navegação de Abas */}
+             <div className="flex gap-4 mb-4 border-b border-white/5 pb-1">
+                <button onClick={() => setActiveTab('team')} className={`pb-2 text-xs font-bold uppercase tracking-widest transition-all flex items-center gap-2 ${activeTab === 'team' ? 'text-yellow-500 border-b-2 border-yellow-500' : 'text-gray-500 hover:text-white'}`}>
+                    <LayoutDashboard size={14}/> Visão Global (Raio-X)
+                </button>
+                <button onClick={() => setActiveTab('history')} className={`pb-2 text-xs font-bold uppercase tracking-widest transition-all flex items-center gap-2 ${activeTab === 'history' ? 'text-yellow-500 border-b-2 border-yellow-500' : 'text-gray-500 hover:text-white'}`}>
+                    <History size={14}/> Meu Histórico
+                </button>
+             </div>
+
+             <div className="flex-1 bg-[#0a0510]/80 backdrop-blur-xl border border-white/10 rounded-3xl overflow-hidden shadow-2xl relative">
+                {activeTab === 'team' ? (
+                    // VISÃO DE EQUIPE (GOD MODE)
+                    <div className="h-full flex flex-col">
+                        <div className="p-4 border-b border-white/5 bg-[#151020]/50 flex justify-between items-center">
+                            <div className="relative w-64">
+                                <Search className="absolute left-3 top-2.5 text-gray-500 w-4 h-4" />
+                                <input type="text" placeholder="Pesquisar qualquer agente..." className="w-full bg-black/40 border border-white/10 rounded-xl pl-10 pr-4 py-2 text-xs text-white focus:border-yellow-500 outline-none" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
+                            </div>
+                            <div className="flex gap-2 text-[9px] font-mono text-gray-500">
+                                <span>TOTAL AGENTES: {teamAgents.length}</span>
+                                <span className="text-green-500">ONLINE: {teamAgents.filter(a => a.status === 'online').length}</span>
+                            </div>
+                        </div>
+                        <div className="flex-1 overflow-y-auto p-2 custom-scrollbar space-y-2">
+                            {filteredTeam.map((agent, index) => {
+                                // Lógica de Progresso Visual
+                                const agentTotal = agent.sales_total || 0;
+                                const agentNextGoal = GOALS.find(g => g > agentTotal) || GOALS[GOALS.length - 1];
+                                const agentProgress = Math.min(100, (agentTotal / agentNextGoal) * 100);
+                                const isLeader = index === 0 && agentTotal > 0;
+
+                                return (
+                                    <motion.div key={agent.id} initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0, transition: { delay: index * 0.05 } }}
+                                        className={`p-4 rounded-2xl border transition-all ${isLeader ? 'bg-gradient-to-r from-yellow-900/20 to-transparent border-yellow-500/30' : 'bg-white/5 border-transparent hover:bg-white/10'}`}
+                                    >
+                                        <div className="flex items-center justify-between mb-2">
+                                            <div className="flex items-center gap-4">
+                                                <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-black text-sm ${isLeader ? 'bg-yellow-500 text-black' : 'bg-gray-800 text-gray-400'}`}>{index + 1}</div>
+                                                <div>
+                                                    <p className={`text-sm font-bold flex items-center gap-2 ${isLeader ? 'text-yellow-400' : 'text-white'}`}>
+                                                        {agent.name} {agent.id === userProfile?.id && <span className="text-[9px] bg-purple-900/50 text-purple-300 px-1 rounded border border-purple-500/20">VOCÊ</span>}
+                                                    </p>
+                                                    <p className="text-[9px] text-gray-500 uppercase">{agent.role}</p>
+                                                </div>
+                                            </div>
+                                            <div className="text-right">
+                                                <p className={`font-mono font-bold ${isLeader ? 'text-yellow-400 text-lg' : 'text-gray-300'}`}>{formatCurrency(agentTotal)}</p>
+                                                <p className="text-[9px] text-gray-600">Meta: {formatK(agentNextGoal)}</p>
+                                            </div>
                                         </div>
-                                        <div>
-                                            <p className={`text-sm font-bold ${index === 0 ? 'text-yellow-500' : 'text-white'}`}>{agent.name} {agent.id === userProfile?.id && <span className="text-[9px] text-gray-500 ml-1">(Você)</span>}</p>
-                                            <p className="text-[9px] text-gray-500 uppercase tracking-wider flex items-center gap-1">
-                                                <div className={`w-1.5 h-1.5 rounded-full ${agent.status === 'online' ? 'bg-green-500' : 'bg-gray-600'}`}></div> {agent.role}
-                                            </p>
+                                        {/* Barra de Progresso do Agente */}
+                                        <div className="w-full h-1.5 bg-black rounded-full overflow-hidden flex items-center">
+                                            <div className={`h-full rounded-full ${isLeader ? 'bg-yellow-500' : 'bg-purple-600'}`} style={{ width: `${agentProgress}%` }}></div>
                                         </div>
-                                    </div>
-                                    <div className={`font-mono font-bold ${index === 0 ? 'text-yellow-400 text-lg' : 'text-gray-300 text-sm'}`}>
-                                        {formatCurrency(agent.sales_total || 0)}
-                                    </div>
-                                </motion.div>
-                            ))
-                        )}
-                    </AnimatePresence>
-                </div>
-                
-                <div className="p-4 bg-black/40 border-t border-white/5 text-[9px] text-center text-gray-600 font-mono uppercase tracking-widest">
-                    Database Connected • {teamAgents.length} Records
-                </div>
-            </div>
+                                    </motion.div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                ) : (
+                    // MEU HISTÓRICO (Tabela Simples)
+                    <div className="h-full overflow-auto p-4 custom-scrollbar">
+                         <table className="w-full text-left text-sm border-separate border-spacing-y-2">
+                            <thead className="text-[9px] text-gray-500 uppercase tracking-widest"><tr><th className="p-2">Data</th><th className="p-2">Cliente</th><th className="p-2">Produto</th><th className="p-2 text-right">Valor</th></tr></thead>
+                            <tbody className="font-mono text-xs">
+                                {sales.map(sale => (
+                                    <tr key={sale.id} className="bg-white/5 hover:bg-white/10">
+                                        <td className="p-3 rounded-l-lg text-gray-400">{new Date(sale.created_at).toLocaleDateString('pt-BR')}</td>
+                                        <td className="p-3 text-white font-sans font-bold">{sale.client_name}</td>
+                                        <td className="p-3 text-purple-400">{sale.product}</td>
+                                        <td className="p-3 rounded-r-lg text-right text-green-400 font-bold">{formatCurrency(sale.value)}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                         </table>
+                         {sales.length === 0 && <div className="text-center py-10 text-gray-500 text-xs">Nenhuma venda registrada</div>}
+                    </div>
+                )}
+             </div>
         </div>
 
       </main>
