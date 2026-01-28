@@ -1,0 +1,145 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+body {
+  background-color: #030008;
+  color: white;
+  overflow-x: hidden;
+  max-width: 100vw;
+}
+
+/* --- OTIMIZAÇÃO DE PERFORMANCE (GPU) --- */
+.gpu-accelerated {
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  will-change: transform, opacity;
+}
+
+/* --- FUNDO CYBERPUNK --- */
+.cyber-grid {
+  background-size: 40px 40px;
+  background-image: linear-gradient(to right, rgba(0, 212, 255, 0.05) 1px, transparent 1px),
+                    linear-gradient(to bottom, rgba(0, 212, 255, 0.05) 1px, transparent 1px);
+  mask-image: radial-gradient(circle at center, black 40%, transparent 80%);
+}
+
+.glass-panel {
+  background: rgba(10, 10, 25, 0.4); /* Reduzi a opacidade para aliviar o blur */
+  backdrop-filter: blur(10px); /* Reduzi de 20px para 10px (muito mais leve) */
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.glow-text {
+  text-shadow: 0 0 10px rgba(0, 212, 255, 0.5);
+}
+
+/* --- WARP SPEED (ESTRELAS) OTIMIZADO --- */
+.warp-speed-container {
+  perspective: 500px;
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  z-index: 0;
+  pointer-events: none; /* Garante que não bloqueie cliques */
+}
+
+.warp-star {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  height: 2px;
+  width: 2px;
+  background-color: #fff;
+  border-radius: 50%;
+  box-shadow: 0 0 4px #fff, 0 0 8px #00d4ff; /* Reduzi o tamanho da sombra */
+  animation: warp 3s infinite linear;
+  opacity: 0;
+  will-change: transform, opacity; /* FORÇA GPU */
+}
+
+@keyframes warp {
+  0% { transform: translateZ(0) translateY(0) rotate(0deg); opacity: 1; }
+  100% { transform: translateZ(500px) translateY(calc(var(--angle) * 10px)) rotate(var(--rotation)); opacity: 0; }
+}
+
+/* --- EFEITOS ULTRA-FUTURISTAS --- */
+.scanline {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(to bottom, transparent 0%, rgba(0, 212, 255, 0.05) 50%, transparent 100%);
+  animation: scan 8s linear infinite; /* Mais lento para pesar menos */
+  pointer-events: none;
+  z-index: 10;
+  opacity: 0.3;
+}
+
+@keyframes scan {
+  0% { transform: translateY(-100%); }
+  100% { transform: translateY(100%); }
+}
+
+/* Card Holográfico Otimizado */
+.holo-card {
+  backdrop-filter: blur(8px); /* Blur reduzido */
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.03), rgba(0, 0, 0, 0.4));
+  border: 1px solid rgba(0, 212, 255, 0.2);
+  box-shadow: 0 0 15px rgba(0, 0, 0, 0.5);
+  position: relative;
+  overflow: hidden;
+  will-change: transform; /* Prepara para animações de hover */
+}
+
+.holo-card:hover {
+    border-color: rgba(0, 212, 255, 0.5);
+    box-shadow: 0 0 25px rgba(0, 212, 255, 0.2);
+    transition: all 0.3s ease; /* Transição suave via CSS é mais leve que JS */
+}
+
+/* Barra de Energia */
+.energy-bar-container {
+    box-shadow: 0 0 10px rgba(0, 212, 255, 0.2), inset 0 0 5px rgba(0,0,0,0.5);
+    border: 1px solid rgba(0, 212, 255, 0.3);
+}
+
+.energy-bar-fill {
+    background: linear-gradient(90deg, #00d4ff, #8a2be2, #00d4ff);
+    background-size: 200% 100%;
+    animation: energy-flow 3s linear infinite;
+    box-shadow: 0 0 10px rgba(0, 212, 255, 0.5);
+    position: relative;
+    will-change: background-position, width;
+}
+
+@keyframes energy-flow {
+    0% { background-position: 100% 0%; }
+    100% { background-position: -100% 0%; }
+}
+
+/* --- SCROLLBAR --- */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: #050510; }
+::-webkit-scrollbar-thumb { background: #1e1e2e; border-radius: 10px; border: 1px solid rgba(0, 212, 255, 0.1); }
+::-webkit-scrollbar-thumb:hover { background: #00d4ff; }
+
+/* Animações Gerais */
+.animate-spin-slow { animation: spin 8s linear infinite; }
+@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+/* Animação para quando o Card aparece */
+@keyframes hologram-appear {
+  0% { transform: scaleY(0); opacity: 0; }
+  100% { transform: scaleY(1); opacity: 1; }
+}
+.holo-appear { animation: hologram-appear 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; transform-origin: center top; }
+
+/* Botão Deletar */
+.btn-delete:hover { box-shadow: 0 0 10px rgba(239, 68, 68, 0.4); background: rgba(239, 68, 68, 0.1); }
