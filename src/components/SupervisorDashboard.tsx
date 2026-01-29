@@ -441,3 +441,5 @@ export const SupervisorDashboard = () => {
     </div>
   );
 };
+
+//Atualizando duelo real
