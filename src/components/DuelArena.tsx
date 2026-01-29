@@ -6,8 +6,7 @@ interface DuelArenaProps {
 }
 
 export const DuelArena: React.FC<DuelArenaProps> = ({ myScore }) => {
-  // Simulação: Rival sempre 20% acima ou abaixo aleatoriamente para gerar tensão
-  // Em um app real, isso viria do backend
+
   const rivalScore = Math.max(15000, myScore * 1.1 + 2000); 
   const maxScale = Math.max(myScore, rivalScore) * 1.2;
 
