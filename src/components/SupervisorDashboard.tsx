@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Rocket, Target, DollarSign, Zap, LogOut, User, Cpu, Swords, Search, Crown, LayoutDashboard, History, ShieldCheck, Crosshair, StopCircle } from 'lucide-react';
+import { Rocket, Target, DollarSign, Zap, LogOut, User, Cpu, Swords, Search, Crown, LayoutDashboard, History, ShieldCheck, Crosshair, StopCircle, Trophy } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../supabase';
@@ -48,13 +48,13 @@ export const SupervisorDashboard = () => {
   const [activeTab, setActiveTab] = useState<'history' | 'team'>('team');
   const [searchQuery, setSearchQuery] = useState('');
 
-  // ESTADOS DO DUELO
+  // ESTADOS DO DUELO REAL (DB)
   const [selectedOpponentId, setSelectedOpponentId] = useState<string | null>(null);
   const [selectedGoal, setSelectedGoal] = useState<number>(50000);
-  const [activeDuel, setActiveDuel] = useState<{opponentName: string, opponentSales: number, goal: number} | null>(null);
+  const [activeDuelData, setActiveDuelData] = useState<any>(null); // Dados brutos do duelo
   const [sentNotification, setSentNotification] = useState<{show: boolean, name: string}>({ show: false, name: '' });
 
-  // CARREGAMENTO
+  // 1. CARREGAMENTO INICIAL
   useEffect(() => {
     const init = async () => {
         const { data: { user } } = await supabase.auth.getUser();
@@ -66,35 +66,78 @@ export const SupervisorDashboard = () => {
         const { data: mySales } = await supabase.from('sales').select('*').eq('user_id', user.id).order('created_at', { ascending: false });
         if (mySales) setSales(mySales);
 
-        fetchTeamData(user.id);
+        fetchTeamData();
+        fetchActiveDuel(user.id); // Busca duelo ativo ao carregar
     };
     init();
 
-    const sub = supabase.channel('supervisor-global').on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => {
-        if(userProfile) fetchTeamData(userProfile.id);
-    }).subscribe();
+    // 2. ESCUTAR MUDANÇAS EM TEMPO REAL (Vendas e Duelos)
+    const channel = supabase.channel('supervisor-realtime')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => {
+            fetchTeamData(); // Atualiza ranking se alguém vender
+        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'duels' }, (payload) => {
+            // Se criarem ou atualizarem um duelo onde EU estou envolvido
+            const duel = payload.new as any;
+            if (userProfile && (duel.challenger_id === userProfile.id || duel.opponent_id === userProfile.id)) {
+                fetchActiveDuel(userProfile.id);
+            }
+        })
+        .subscribe();
 
-    return () => { supabase.removeChannel(sub); }
-  }, [navigate, userProfile?.id]);
+    return () => { supabase.removeChannel(channel); }
+  }, [navigate, userProfile?.id]); // Dependência userProfile.id é importante
 
-  const fetchTeamData = async (myId: string) => {
+  // BUSCA DADOS DO TIME
+  const fetchTeamData = async () => {
       const { data } = await supabase.from('profiles').select('*').order('sales_total', { ascending: false });
       if (data) setTeamAgents(data);
   }
 
-  // --- FUNÇÃO DE LOGOUT CORRIGIDA ---
-  const handleLogout = async () => {
-    await supabase.auth.signOut(); // Avisa o banco que saiu
-    navigate('/'); // Depois redireciona
+  // BUSCA SE JÁ EXISTE DUELO ATIVO NO BANCO
+  const fetchActiveDuel = async (myId: string) => {
+      const { data } = await supabase
+        .from('duels')
+        .select('*')
+        .or(`challenger_id.eq.${myId},opponent_id.eq.${myId}`)
+        .eq('status', 'active')
+        .single();
+      
+      setActiveDuelData(data);
   };
 
-  // CÁLCULOS
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    navigate('/');
+  };
+
+  // CÁLCULOS PESSOAIS
   const totalSales = useMemo(() => sales.reduce((acc, curr) => acc + Number(curr.value), 0), [sales]);
   const nextGoal = GOALS.find(g => g > totalSales) || GOALS[GOALS.length - 1];
   const progressPercent = Math.min(100, (totalSales / nextGoal) * 100);
   const commission = totalSales * (totalSales > 100000 ? 0.015 : 0.01);
   const formatCurrency = (val: number) => val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
   const formatK = (val: number) => `R$ ${val / 1000}k`;
+
+  // --- CÁLCULOS DO DUELO (O coração da batalha) ---
+  const duelInfo = useMemo(() => {
+    if (!activeDuelData || !userProfile || teamAgents.length === 0) return null;
+
+    const isChallenger = activeDuelData.challenger_id === userProfile.id;
+    const opponentId = isChallenger ? activeDuelData.opponent_id : activeDuelData.challenger_id;
+    const opponent = teamAgents.find(a => a.id === opponentId);
+
+    // Se não achar o oponente na lista (bug raro), retorna null
+    if (!opponent) return null;
+
+    return {
+        goal: Number(activeDuelData.goal),
+        mySales: userProfile.sales_total || 0,
+        opponentName: opponent.name,
+        opponentSales: opponent.sales_total || 0,
+        opponentRole: opponent.role
+    };
+  }, [activeDuelData, userProfile, teamAgents]);
 
   // AÇÕES
   const handleSubmit = async (e: React.FormEvent) => {
@@ -114,21 +157,37 @@ export const SupervisorDashboard = () => {
         setSales([data[0], ...sales]);
         setFormData({ ...formData, client: '', value: '' });
         await supabase.from('profiles').update({ sales_total: totalSales + val }).eq('id', userProfile.id);
-        fetchTeamData(userProfile.id);
+        fetchTeamData(); // Atualiza dados gerais
     }
   };
 
-  const handleStartDuel = () => {
-    if (selectedOpponentId) {
+  // --- INICIAR DUELO REAL (No Banco) ---
+  const handleStartDuel = async () => {
+    if (selectedOpponentId && userProfile) {
         const opponent = teamAgents.find(op => op.id === selectedOpponentId);
-        const opponentName = opponent?.name || 'Oponente';
-        const opponentSales = opponent?.sales_total || 0; 
         
-        setSentNotification({ show: true, name: opponentName });
+        // Insere no banco (A outra pessoa vai receber via Realtime)
+        await supabase.from('duels').insert([{
+            challenger_id: userProfile.id,
+            opponent_id: selectedOpponentId,
+            goal: selectedGoal,
+            status: 'active' // Já inicia ativo para simplificar
+        }]);
+
+        setSentNotification({ show: true, name: opponent?.name || '' });
         setTimeout(() => setSentNotification({ show: false, name: '' }), 3000);
-        setActiveDuel({ opponentName, opponentSales, goal: selectedGoal });
+        setSelectedOpponentId(null);
     }
   };
+
+  // --- PARAR DUELO (No Banco) ---
+  const handleStopDuel = async () => {
+      if(activeDuelData) {
+          // Deleta ou marca como finalizado
+          await supabase.from('duels').delete().eq('id', activeDuelData.id);
+          setActiveDuelData(null);
+      }
+  }
 
   const filteredTeam = teamAgents.filter(agent => agent.name.toLowerCase().includes(searchQuery.toLowerCase()));
 
@@ -142,7 +201,6 @@ export const SupervisorDashboard = () => {
         <img src="https://cdn-icons-png.flaticon.com/512/2026/2026465.png" alt="Mascote" className="w-full h-full object-contain" style={{filter: 'hue-rotate(45deg)'}} />
       </motion.div>
 
-      {/* HEADER COM LOGOUT CORRIGIDO */}
       <header className="fixed top-0 w-full z-50 px-6 py-3 bg-[#0a0510]/90 backdrop-blur-xl border-b border-yellow-500/10 flex justify-between items-center shadow-2xl">
         <div className="flex items-center gap-4">
             <div className="relative group">
@@ -154,7 +212,7 @@ export const SupervisorDashboard = () => {
             <div>
                 <h1 className="text-xl font-black tracking-[0.2em] text-white leading-none">STAR<span className="text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-purple-600">BANK</span></h1>
                 <p className="text-[9px] text-yellow-600/80 font-mono tracking-[0.4em] uppercase mt-1 flex items-center gap-2">
-                    <span className="w-1.5 h-1.5 bg-yellow-500 rounded-full animate-pulse"></span> Supervisor
+                    <span className="w-1.5 h-1.5 bg-yellow-500 rounded-full animate-pulse"></span> Supreme Access
                 </p>
             </div>
         </div>
@@ -163,9 +221,8 @@ export const SupervisorDashboard = () => {
                 <div className="text-xs font-bold text-white flex items-center justify-end gap-2">
                     {userProfile?.name || 'Supervisor'} <Crown size={14} className="text-yellow-500 fill-yellow-500"/>
                 </div>
-                <div className="text-[9px] text-gray-500 font-mono">GOD MODE ENABLED</div>
+                <div className="text-[9px] text-gray-500 font-mono">SEJA BEM VINDO(A)</div>
             </div>
-            {/* BOTÃO CORRIGIDO AQUI: */}
             <button onClick={handleLogout} className="p-2 rounded-lg bg-white/5 hover:bg-red-900/20 text-gray-400 hover:text-red-400 transition-all border border-white/5 hover:border-red-500/30 cursor-pointer">
                 <LogOut size={18} />
             </button>
@@ -198,7 +255,7 @@ export const SupervisorDashboard = () => {
         <div className="col-span-12 lg:col-span-4 space-y-6">
             <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.4 }} className="holo-card rounded-3xl p-6 bg-[#0a0510]/80 border border-yellow-500/20 relative group">
                 <div className="absolute inset-0 bg-gradient-to-tr from-yellow-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-700 pointer-events-none"></div>
-                <h2 className="text-sm font-black text-yellow-500 mb-5 flex items-center gap-2 tracking-wider uppercase"><Rocket size={16}/> Lançar Venda</h2>
+                <h2 className="text-sm font-black text-yellow-500 mb-5 flex items-center gap-2 tracking-wider uppercase"><Rocket size={16}/> Lançar Venda (Master)</h2>
                 
                 <form onSubmit={handleSubmit} className="space-y-4 font-mono">
                     <div className="space-y-1">
@@ -209,7 +266,7 @@ export const SupervisorDashboard = () => {
                     <div className="grid grid-cols-2 gap-3">
                         <div className="space-y-1">
                             <label className="text-[9px] text-gray-500 uppercase font-bold ml-1">Convênio</label>
-                            <input type="text" placeholder="Ex: Barcarena" value={formData.agreement} onChange={e => setFormData({...formData, agreement: e.target.value})} className="w-full bg-[#151020] border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:border-yellow-500 outline-none transition-all" />
+                            <input type="text" placeholder="Ex: INSS" value={formData.agreement} onChange={e => setFormData({...formData, agreement: e.target.value})} className="w-full bg-[#151020] border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:border-yellow-500 outline-none transition-all" />
                         </div>
                         <div className="space-y-1">
                             <label className="text-[9px] text-gray-500 uppercase font-bold ml-1">Produto</label>
@@ -228,22 +285,23 @@ export const SupervisorDashboard = () => {
                 </form>
             </motion.div>
 
+            {/* DUELO CONECTADO AO BANCO */}
             <AnimatePresence mode="wait">
-            {activeDuel ? (
+            {duelInfo ? (
                  <motion.div initial={{ opacity: 0, scaleY: 0 }} animate={{ opacity: 1, scaleY: 1 }} className="holo-card rounded-3xl p-6 border border-red-500/30 relative overflow-hidden flex flex-col">
                     <div className="flex justify-between items-center mb-6">
-                        <h3 className="font-black text-red-500 text-xs flex items-center gap-2 uppercase tracking-widest animate-pulse"><Swords size={16} /> Duelo Ativo: {formatK(activeDuel.goal)}</h3>
-                        <button onClick={() => setActiveDuel(null)} className="text-[10px] text-red-400 hover:text-white border border-red-900/50 px-2 py-1 rounded bg-red-950/30 flex items-center gap-1"><StopCircle size={10} /> PARAR</button>
+                        <h3 className="font-black text-red-500 text-xs flex items-center gap-2 uppercase tracking-widest animate-pulse"><Swords size={16} /> Duelo Ativo: {formatK(duelInfo.goal)}</h3>
+                        <button onClick={handleStopDuel} className="text-[10px] text-red-400 hover:text-white border border-red-900/50 px-2 py-1 rounded bg-red-950/30 flex items-center gap-1"><StopCircle size={10} /> ENCERRAR</button>
                     </div>
                     <div className="space-y-6">
                         <div>
-                            <div className="flex justify-between text-[10px] font-bold mb-1 uppercase tracking-wider items-end"><span className="text-yellow-500 flex items-center gap-1"><User size={12}/> Você</span><span className="text-white font-mono">{formatCurrency(totalSales)}</span></div>
-                            <div className="h-3 bg-black rounded-full overflow-hidden border border-yellow-500/30"><motion.div className="h-full bg-gradient-to-r from-yellow-600 to-yellow-400" initial={{ width: 0 }} animate={{ width: `${Math.min(100, (totalSales / activeDuel.goal) * 100)}%` }} /></div>
+                            <div className="flex justify-between text-[10px] font-bold mb-1 uppercase tracking-wider items-end"><span className="text-yellow-500 flex items-center gap-1"><User size={12}/> Você</span><span className="text-white font-mono">{formatCurrency(duelInfo.mySales)}</span></div>
+                            <div className="h-3 bg-black rounded-full overflow-hidden border border-yellow-500/30"><motion.div className="h-full bg-gradient-to-r from-yellow-600 to-yellow-400" initial={{ width: 0 }} animate={{ width: `${Math.min(100, (duelInfo.mySales / duelInfo.goal) * 100)}%` }} /></div>
                         </div>
                         <div className="text-center text-xs font-black text-gray-600 italic">VS</div>
                         <div>
-                            <div className="flex justify-between text-[10px] font-bold mb-1 uppercase tracking-wider items-end"><span className="text-red-500 flex items-center gap-1"><Cpu size={12}/> {activeDuel.opponentName}</span><span className="text-gray-400 font-mono">{formatCurrency(activeDuel.opponentSales)}</span></div>
-                            <div className="h-3 bg-black rounded-full overflow-hidden border border-red-500/30"><motion.div className="h-full bg-gradient-to-r from-red-900 to-red-500" initial={{ width: 0 }} animate={{ width: `${Math.min(100, (activeDuel.opponentSales / activeDuel.goal) * 100)}%` }} /></div>
+                            <div className="flex justify-between text-[10px] font-bold mb-1 uppercase tracking-wider items-end"><span className="text-red-500 flex items-center gap-1"><Cpu size={12}/> {duelInfo.opponentName}</span><span className="text-gray-400 font-mono">{formatCurrency(duelInfo.opponentSales)}</span></div>
+                            <div className="h-3 bg-black rounded-full overflow-hidden border border-red-500/30"><motion.div className="h-full bg-gradient-to-r from-red-900 to-red-500" initial={{ width: 0 }} animate={{ width: `${Math.min(100, (duelInfo.opponentSales / duelInfo.goal) * 100)}%` }} /></div>
                         </div>
                     </div>
                  </motion.div>
@@ -275,7 +333,7 @@ export const SupervisorDashboard = () => {
         <div className="col-span-12 lg:col-span-8 h-full flex flex-col">
              <div className="flex gap-4 mb-4 border-b border-white/5 pb-1">
                 <button onClick={() => setActiveTab('team')} className={`pb-2 text-xs font-bold uppercase tracking-widest transition-all flex items-center gap-2 ${activeTab === 'team' ? 'text-yellow-500 border-b-2 border-yellow-500' : 'text-gray-500 hover:text-white'}`}>
-                    <LayoutDashboard size={14}/> Visão Global
+                    <LayoutDashboard size={14}/> Visão Global (Raio-X)
                 </button>
                 <button onClick={() => setActiveTab('history')} className={`pb-2 text-xs font-bold uppercase tracking-widest transition-all flex items-center gap-2 ${activeTab === 'history' ? 'text-yellow-500 border-b-2 border-yellow-500' : 'text-gray-500 hover:text-white'}`}>
                     <History size={14}/> Meu Histórico
