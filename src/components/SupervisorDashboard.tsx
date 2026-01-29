@@ -1,13 +1,22 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Rocket, Target, DollarSign, Zap, LogOut, User, Cpu, Swords, Search, Crown, LayoutDashboard, History, ShieldCheck, Crosshair, StopCircle, Trophy, Loader2 } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { Rocket, Target, DollarSign, Zap, LogOut, Search, Crown, LayoutDashboard, History, ShieldCheck, Trophy, Medal, Star, Globe, ChevronRight, Loader2 } from 'lucide-react';
+import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../supabase';
 
-// --- CONFIGURAÇÃO DE METAS ---
-const GOALS = [50000, 80000, 100000, 150000];
+// --- CONFIGURAÇÃO DE NÍVEIS (PATENTES) ---
+const RANKS = [
+  { name: 'Cadete Espacial', threshold: 0, icon: Star, color: 'text-gray-400', bg: 'bg-gray-500' },
+  { name: 'Agente de Campo', threshold: 20000, icon: ShieldCheck, color: 'text-green-400', bg: 'bg-green-500' },
+  { name: 'Capitão de Fragata', threshold: 50000, icon: Medal, color: 'text-blue-400', bg: 'bg-blue-500' },
+  { name: 'Comandante Estelar', threshold: 80000, icon: Zap, color: 'text-purple-400', bg: 'bg-purple-500' },
+  { name: 'Almirante da Frota', threshold: 100000, icon: Crown, color: 'text-yellow-400', bg: 'bg-yellow-500' },
+];
 
-// --- COMPONENTES VISUAIS (EFEITOS) ---
+// --- META DA EQUIPE (PLANETA) ---
+const TEAM_MISSION_GOAL = 500000;
+
+// --- COMPONENTES VISUAIS ---
 const MiniHoloChart = ({ color }: { color: string }) => {
   const pathColor = color === 'gold' ? '#ffd700' : color === 'purple' ? '#a855f7' : '#22c55e';
   return (
@@ -35,6 +44,63 @@ const KpiCardHolo = ({ title, value, icon: Icon, colorName, delay }: any) => {
     );
 };
 
+// --- COMPONENTE DO PLANETA (TERRAFORMAÇÃO) ---
+const PlanetView = ({ progress }: { progress: number }) => {
+    // Define a aparência do planeta baseado no progresso
+    let planetClass = "from-gray-800 to-gray-900"; // Fase 0: Rocha Morta
+    let atmosphereClass = "opacity-0";
+    let statusText = "PLANETA MORTO";
+    
+    if (progress >= 25) { 
+        planetClass = "from-blue-900 to-gray-800"; // Fase 1: Água
+        statusText = "HIDROSFERA DETECTADA";
+    }
+    if (progress >= 50) {
+        planetClass = "from-green-800 via-blue-900 to-gray-900"; // Fase 2: Vida
+        atmosphereClass = "opacity-20 bg-blue-500";
+        statusText = "VEGETAÇÃO EM CRESCIMENTO";
+    }
+    if (progress >= 75) {
+        planetClass = "from-green-600 via-blue-600 to-blue-900"; // Fase 3: Atmosfera
+        atmosphereClass = "opacity-40 bg-cyan-400";
+        statusText = "ATMOSFERA ESTÁVEL";
+    }
+    if (progress >= 100) {
+        planetClass = "from-yellow-200 via-blue-500 to-green-500"; // Fase 4: Utopia (Luzes)
+        atmosphereClass = "opacity-60 bg-yellow-200 shadow-[0_0_50px_rgba(255,255,0,0.3)]";
+        statusText = "COLÔNIA ESTABELECIDA";
+    }
+
+    return (
+        <div className="relative w-full h-48 flex items-center justify-center overflow-hidden rounded-2xl bg-[#05000a] border border-white/5 mb-4 group">
+            {/* Estrelas de fundo */}
+            <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] opacity-30"></div>
+            
+            {/* O Planeta */}
+            <motion.div 
+                className={`relative w-24 h-24 rounded-full bg-gradient-to-br ${planetClass} shadow-[inset_-10px_-10px_20px_rgba(0,0,0,1)] transition-all duration-1000`}
+                animate={{ rotate: 360 }}
+                transition={{ duration: 100, repeat: Infinity, ease: "linear" }}
+            >
+                {/* Atmosfera */}
+                <div className={`absolute inset-[-5px] rounded-full blur-md transition-all duration-1000 ${atmosphereClass}`}></div>
+                {/* Textura simulada */}
+                <div className="absolute inset-0 opacity-30 bg-[url('https://www.transparenttextures.com/patterns/black-scales.png')] mix-blend-multiply rounded-full"></div>
+            </motion.div>
+
+            {/* HUD Overlay */}
+            <div className="absolute top-3 left-3">
+                 <div className="text-[9px] text-gray-500 font-mono flex items-center gap-1"><Globe size={10}/> TERRAFORMAÇÃO</div>
+                 <div className="text-xl font-black text-white">{progress.toFixed(1)}%</div>
+            </div>
+             <div className="absolute bottom-3 right-3 text-right">
+                 <div className="text-[9px] text-gray-500 font-mono">STATUS</div>
+                 <div className={`text-[10px] font-bold tracking-widest ${progress >= 100 ? 'text-yellow-400 animate-pulse' : 'text-blue-400'}`}>{statusText}</div>
+            </div>
+        </div>
+    );
+};
+
 export const SupervisorDashboard = () => {
   const navigate = useNavigate();
   
@@ -49,71 +115,36 @@ export const SupervisorDashboard = () => {
   const [activeTab, setActiveTab] = useState<'history' | 'team'>('team');
   const [searchQuery, setSearchQuery] = useState('');
 
-  // DUELO REAL (DB)
-  const [selectedOpponentId, setSelectedOpponentId] = useState<string | null>(null);
-  const [selectedGoal, setSelectedGoal] = useState<number>(50000);
-  const [activeDuelData, setActiveDuelData] = useState<any>(null);
-  const [sentNotification, setSentNotification] = useState<{show: boolean, name: string}>({ show: false, name: '' });
-
-  // --- 1. CARREGAMENTO INICIAL E REALTIME ---
   useEffect(() => {
-    let myUserId = '';
-
     const init = async () => {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) { navigate('/'); return; }
-        myUserId = user.id;
 
-        // Carrega Perfil
         const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).single();
         setUserProfile(profile);
 
-        // Carrega Vendas
         const { data: mySales } = await supabase.from('sales').select('*').eq('user_id', user.id).order('created_at', { ascending: false });
         if (mySales) setSales(mySales);
 
-        // Carrega Time e Duelos
         await fetchTeamData();
-        await fetchActiveDuel(user.id);
         setLoading(false);
     };
 
     init();
 
-    // CANAL DE TEMPO REAL (O SEGREDO DO DUELO)
     const channel = supabase.channel('starbank-global')
-        // Escuta Vendas (para atualizar ranking)
         .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => {
             fetchTeamData();
-            // Se houver duelo ativo, atualiza ele também pois as vendas mudaram
-            if (myUserId) fetchActiveDuel(myUserId);
-        })
-        // Escuta Duelos (Novos desafios ou cancelamentos)
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'duels' }, (payload) => {
-            console.log(" Mudança no Duelo detectada:", payload);
-            if (myUserId) fetchActiveDuel(myUserId);
         })
         .subscribe();
 
     return () => { supabase.removeChannel(channel); }
   }, [navigate]);
 
-  // --- FUNÇÕES AUXILIARES ---
   const fetchTeamData = async () => {
       const { data } = await supabase.from('profiles').select('*').order('sales_total', { ascending: false });
       if (data) setTeamAgents(data);
   }
-
-  const fetchActiveDuel = async (myId: string) => {
-      // Busca se existe algum duelo onde eu sou desafiante OU oponente
-      const { data } = await supabase
-        .from('duels')
-        .select('*')
-        .or(`challenger_id.eq.${myId},opponent_id.eq.${myId}`)
-        .maybeSingle(); // Usa maybeSingle para não dar erro se não tiver nenhum
-      
-      setActiveDuelData(data); 
-  };
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -122,32 +153,30 @@ export const SupervisorDashboard = () => {
 
   // CÁLCULOS MATEMÁTICOS
   const totalSales = useMemo(() => sales.reduce((acc, curr) => acc + Number(curr.value), 0), [sales]);
-  const nextGoal = GOALS.find(g => g > totalSales) || GOALS[GOALS.length - 1];
-  const progressPercent = Math.min(100, (totalSales / nextGoal) * 100);
   const commission = totalSales * (totalSales > 100000 ? 0.015 : 0.01);
   const formatCurrency = (val: number) => val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
   const formatK = (val: number) => `R$ ${val / 1000}k`;
 
-  // --- INTELIGÊNCIA DO DUELO ---
-  // Transforma os dados brutos do banco em informações para a tela
-  const duelInfo = useMemo(() => {
-    if (!activeDuelData || !userProfile || teamAgents.length === 0) return null;
+  // --- LÓGICA DE PATENTES (RANK SYSTEM) ---
+  const currentRankIndex = RANKS.slice().reverse().findIndex(r => totalSales >= r.threshold);
+  const rankIndex = currentRankIndex >= 0 ? RANKS.length - 1 - currentRankIndex : 0;
+  const currentRank = RANKS[rankIndex];
+  const nextRank = RANKS[rankIndex + 1];
+  
+  // Progresso para a próxima patente
+  let rankProgress = 100;
+  let distToNext = 0;
+  if (nextRank) {
+      const prevThreshold = currentRank.threshold;
+      const range = nextRank.threshold - prevThreshold;
+      const currentInRank = totalSales - prevThreshold;
+      rankProgress = Math.min(100, Math.max(0, (currentInRank / range) * 100));
+      distToNext = nextRank.threshold - totalSales;
+  }
 
-    const isChallenger = activeDuelData.challenger_id === userProfile.id;
-    const opponentId = isChallenger ? activeDuelData.opponent_id : activeDuelData.challenger_id;
-    const opponent = teamAgents.find(a => a.id === opponentId);
-
-    // Se o oponente não for encontrado na lista (ex: foi deletado), ignora
-    if (!opponent) return null;
-
-    return {
-        id: activeDuelData.id,
-        goal: Number(activeDuelData.goal),
-        mySales: userProfile.sales_total || 0,
-        opponentName: opponent.name,
-        opponentSales: opponent.sales_total || 0,
-    };
-  }, [activeDuelData, userProfile, teamAgents]);
+  // --- LÓGICA DO PLANETA ---
+  const teamTotalSales = teamAgents.reduce((acc, curr) => acc + (curr.sales_total || 0), 0);
+  const planetProgress = Math.min(100, (teamTotalSales / TEAM_MISSION_GOAL) * 100);
 
   // ENVIAR VENDA
   const handleSubmit = async (e: React.FormEvent) => {
@@ -155,7 +184,6 @@ export const SupervisorDashboard = () => {
     if (!formData.value || !userProfile) return;
     const val = Number(formData.value);
 
-    // 1. Salva a Venda
     const { data, error } = await supabase.from('sales').insert([{
         user_id: userProfile.id,
         client_name: formData.client,
@@ -167,46 +195,10 @@ export const SupervisorDashboard = () => {
     if (!error && data) {
         setSales([data[0], ...sales]);
         setFormData({ ...formData, client: '', value: '' });
-        
-        // 2. Atualiza o Total no Perfil (Isso dispara o Realtime para o duelo!)
         await supabase.from('profiles').update({ sales_total: totalSales + val }).eq('id', userProfile.id);
-        
-        // 3. Atualiza localmente
         fetchTeamData();
-        if(userProfile) fetchActiveDuel(userProfile.id);
     }
   };
-
-  // COMEÇAR DUELO
-  const handleStartDuel = async () => {
-    if (selectedOpponentId && userProfile) {
-        const opponent = teamAgents.find(op => op.id === selectedOpponentId);
-        
-        // Insere no banco
-        const { error } = await supabase.from('duels').insert([{
-            challenger_id: userProfile.id,
-            opponent_id: selectedOpponentId,
-            goal: selectedGoal
-        }]);
-
-        if (!error) {
-            setSentNotification({ show: true, name: opponent?.name || '' });
-            setTimeout(() => setSentNotification({ show: false, name: '' }), 3000);
-            setSelectedOpponentId(null);
-            // O Realtime vai atualizar a tela automaticamente em alguns milissegundos
-        } else {
-            alert("Erro ao criar duelo. Verifique se já não existe um ativo.");
-        }
-    }
-  };
-
-  // ENCERRAR DUELO
-  const handleStopDuel = async () => {
-      if(activeDuelData) {
-          await supabase.from('duels').delete().eq('id', activeDuelData.id);
-          setActiveDuelData(null);
-      }
-  }
 
   const filteredTeam = teamAgents.filter(agent => agent.name.toLowerCase().includes(searchQuery.toLowerCase()));
 
@@ -218,10 +210,6 @@ export const SupervisorDashboard = () => {
       <div className="fixed inset-0 bg-[size:400%_400%] animate-nebula-flow bg-gradient-to-br from-[#0f0014] via-[#05000a] to-[#000000] -z-20"></div>
       <div className="fixed inset-0 cyber-grid opacity-10 mix-blend-screen -z-10"></div>
       <div className="scanline opacity-20"></div>
-
-      <motion.div initial={{ y: 100, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 1 }} className="fixed bottom-5 right-5 w-32 h-32 pointer-events-none z-50 hidden lg:block mix-blend-screen filter drop-shadow-[0_0_20px_rgba(255,215,0,0.4)]">
-        <img src="https://cdn-icons-png.flaticon.com/512/2026/2026465.png" alt="Mascote" className="w-full h-full object-contain" style={{filter: 'hue-rotate(45deg)'}} />
-      </motion.div>
 
       {/* HEADER */}
       <header className="fixed top-0 w-full z-50 px-6 py-3 bg-[#0a0510]/90 backdrop-blur-xl border-b border-yellow-500/10 flex justify-between items-center shadow-2xl">
@@ -258,25 +246,31 @@ export const SupervisorDashboard = () => {
         <div className="col-span-12 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
             <KpiCardHolo title="Suas Vendas" value={formatCurrency(totalSales)} icon={Target} colorName="gold" delay={0.1} />
             <KpiCardHolo title="Sua Comissão" value={formatCurrency(commission)} icon={DollarSign} colorName="green" delay={0.2} />
-            <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.3 }} className="sm:col-span-2 lg:col-span-2 holo-card rounded-2xl p-6 bg-gradient-to-r from-[#1a1025] to-transparent border border-purple-500/30 relative overflow-hidden">
-                <div className="absolute right-0 top-0 opacity-20"><Zap size={100} className="text-purple-500"/></div>
+            {/* KPI DE RANK RESUMIDO */}
+             <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.3 }} className="sm:col-span-2 lg:col-span-2 holo-card rounded-2xl p-6 bg-gradient-to-r from-[#1a1025] to-transparent border border-purple-500/30 relative overflow-hidden">
+                <div className="absolute right-0 top-0 opacity-10"><currentRank.icon size={100} className={currentRank.color}/></div>
                 <div className="relative z-10">
                     <div className="flex justify-between items-center mb-2">
-                        <h3 className="text-purple-400 text-[10px] font-bold uppercase tracking-[0.2em]">Meta Pessoal Atual</h3>
-                        <span className="text-white font-mono font-bold">{progressPercent.toFixed(0)}%</span>
+                        <h3 className="text-purple-400 text-[10px] font-bold uppercase tracking-[0.2em]">PATENTE ATUAL</h3>
+                        <span className={`text-[10px] px-2 py-0.5 rounded border ${currentRank.color} border-current bg-black/50`}>{currentRank.name}</span>
                     </div>
-                    <div className="flex items-end gap-2 mb-3">
-                         <span className="text-3xl font-black text-white">{formatK(nextGoal)}</span>
-                         <span className="text-xs text-gray-400 mb-1 font-mono">Próximo Nível</span>
+                    <div className="flex items-center gap-4 mb-3">
+                         <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${currentRank.bg} text-black shadow-[0_0_15px_rgba(255,255,255,0.3)]`}>
+                             <currentRank.icon size={24} />
+                         </div>
+                         <div>
+                             <span className="text-2xl font-black text-white">{rankProgress.toFixed(0)}%</span>
+                             <p className="text-[10px] text-gray-400">Progresso de Carreira</p>
+                         </div>
                     </div>
-                    <div className="h-3 bg-black/50 rounded-full overflow-hidden border border-white/10">
-                        <motion.div className="h-full bg-gradient-to-r from-purple-600 to-yellow-500" initial={{ width: 0 }} animate={{ width: `${progressPercent}%` }} />
+                    <div className="h-1.5 bg-black/50 rounded-full overflow-hidden border border-white/10">
+                        <motion.div className={`h-full ${currentRank.bg}`} initial={{ width: 0 }} animate={{ width: `${rankProgress}%` }} />
                     </div>
                 </div>
             </motion.div>
         </div>
 
-        {/* INPUT DE VENDAS */}
+        {/* INPUT DE VENDAS + RANK SYSTEM */}
         <div className="col-span-12 lg:col-span-4 space-y-6">
             <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.4 }} className="holo-card rounded-3xl p-6 bg-[#0a0510]/80 border border-yellow-500/20 relative group">
                 <div className="absolute inset-0 bg-gradient-to-tr from-yellow-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-700 pointer-events-none"></div>
@@ -310,54 +304,49 @@ export const SupervisorDashboard = () => {
                 </form>
             </motion.div>
 
-            {/* ÁREA DE DUELO (AGORA REAL) */}
-            <AnimatePresence mode="wait">
-            {duelInfo ? (
-                 <motion.div initial={{ opacity: 0, scaleY: 0 }} animate={{ opacity: 1, scaleY: 1 }} className="holo-card rounded-3xl p-6 border border-red-500/30 relative overflow-hidden flex flex-col">
-                    <div className="flex justify-between items-center mb-6">
-                        <h3 className="font-black text-red-500 text-xs flex items-center gap-2 uppercase tracking-widest animate-pulse"><Swords size={16} /> Duelo Ativo: {formatK(duelInfo.goal)}</h3>
-                        <button onClick={handleStopDuel} className="text-[10px] text-red-400 hover:text-white border border-red-900/50 px-2 py-1 rounded bg-red-950/30 flex items-center gap-1"><StopCircle size={10} /> ENCERRAR</button>
+            {/* --- RANK SYSTEM COMPLETO (ONDE ERA O DUELO) --- */}
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.5 }} className="holo-card rounded-3xl p-6 bg-gradient-to-b from-[#101015] to-black border border-white/10 relative overflow-hidden">
+                <div className="flex justify-between items-center mb-4">
+                    <h2 className="text-sm font-black text-white flex items-center gap-2 tracking-[0.2em] uppercase">
+                        <Medal size={16} className={currentRank.color}/> Carreira
+                    </h2>
+                    {nextRank && <span className="text-[9px] text-gray-500 font-mono">PRÓX: {nextRank.name.split(' ')[0]}</span>}
+                </div>
+
+                {/* Card da Patente */}
+                <div className="flex items-center gap-4 mb-4">
+                    <div className={`w-16 h-16 rounded-2xl flex items-center justify-center ${currentRank.bg} text-black shadow-lg shadow-${currentRank.color.split('-')[1]}-500/20`}>
+                         <currentRank.icon size={32} />
                     </div>
-                    <div className="space-y-6">
-                        {/* Eu */}
-                        <div>
-                            <div className="flex justify-between text-[10px] font-bold mb-1 uppercase tracking-wider items-end"><span className="text-yellow-500 flex items-center gap-1"><User size={12}/> Você</span><span className="text-white font-mono">{formatCurrency(duelInfo.mySales)}</span></div>
-                            <div className="h-3 bg-black rounded-full overflow-hidden border border-yellow-500/30"><motion.div className="h-full bg-gradient-to-r from-yellow-600 to-yellow-400" initial={{ width: 0 }} animate={{ width: `${Math.min(100, (duelInfo.mySales / duelInfo.goal) * 100)}%` }} /></div>
-                        </div>
-                        <div className="text-center text-xs font-black text-gray-600 italic">VS</div>
-                        {/* Oponente */}
-                        <div>
-                            <div className="flex justify-between text-[10px] font-bold mb-1 uppercase tracking-wider items-end"><span className="text-red-500 flex items-center gap-1"><Cpu size={12}/> {duelInfo.opponentName}</span><span className="text-gray-400 font-mono">{formatCurrency(duelInfo.opponentSales)}</span></div>
-                            <div className="h-3 bg-black rounded-full overflow-hidden border border-red-500/30"><motion.div className="h-full bg-gradient-to-r from-red-900 to-red-500" initial={{ width: 0 }} animate={{ width: `${Math.min(100, (duelInfo.opponentSales / duelInfo.goal) * 100)}%` }} /></div>
-                        </div>
+                    <div>
+                        <p className="text-[10px] text-gray-400 uppercase tracking-wider">Patente Atual</p>
+                        <h3 className={`text-lg font-black ${currentRank.color} uppercase leading-none`}>{currentRank.name}</h3>
+                        <p className="text-[10px] text-gray-500 mt-1 font-mono">ID: {userProfile?.id?.slice(0,8)}</p>
                     </div>
-                 </motion.div>
-            ) : (
-                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="holo-card rounded-3xl p-1 overflow-hidden flex flex-col h-[300px]">
-                    <div className="p-4 bg-[#151020] border-b border-white/5 flex justify-between items-center">
-                        <h3 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2"><Swords size={14} className="text-purple-400"/> Iniciar Duelo</h3>
-                        <div className="flex gap-1">{GOALS.map(g => (<button key={g} onClick={() => setSelectedGoal(g)} className={`text-[9px] px-2 py-1 rounded border ${selectedGoal === g ? 'bg-purple-600 text-white border-purple-400' : 'text-gray-500 border-transparent hover:border-purple-500/30'}`}>{g/1000}k</button>))}</div>
+                </div>
+
+                {/* Barra de XP */}
+                {nextRank ? (
+                    <div className="space-y-2">
+                         <div className="flex justify-between text-[10px] font-bold">
+                             <span className="text-gray-400">XP Atual</span>
+                             <span className="text-white">{formatCurrency(totalSales)} / {formatK(nextRank.threshold)}</span>
+                         </div>
+                         <div className="h-2 bg-gray-800 rounded-full overflow-hidden">
+                             <motion.div className={`h-full ${currentRank.bg}`} initial={{ width: 0 }} animate={{ width: `${rankProgress}%` }} />
+                         </div>
+                         <p className="text-[9px] text-center text-gray-600 mt-2 font-mono">Faltam {formatCurrency(distToNext)} para promoção</p>
                     </div>
-                    <div className="flex-1 overflow-y-auto p-2 space-y-2 custom-scrollbar bg-[#0a0510]/50">
-                        {teamAgents.filter(a => a.id !== userProfile?.id).map(agent => (
-                            <div key={agent.id} onClick={() => setSelectedOpponentId(agent.id)} className={`p-2 rounded-xl flex items-center justify-between cursor-pointer border transition-all ${selectedOpponentId === agent.id ? 'bg-purple-900/30 border-purple-500/50' : 'bg-transparent border-transparent hover:bg-white/5'}`}>
-                                <div className="flex items-center gap-3">
-                                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center border ${selectedOpponentId === agent.id ? 'border-purple-400 text-purple-400' : 'border-white/10 text-gray-500'}`}><User size={14}/></div>
-                                    <div><p className={`text-xs font-bold ${selectedOpponentId === agent.id ? 'text-white' : 'text-gray-400'}`}>{agent.name}</p><p className="text-[9px] text-gray-600">{formatCurrency(agent.sales_total || 0)}</p></div>
-                                </div>
-                                {selectedOpponentId === agent.id && <Crosshair size={16} className="text-purple-400 animate-spin-slow"/>}
-                            </div>
-                        ))}
+                ) : (
+                    <div className="p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-xl text-center">
+                        <p className="text-xs font-bold text-yellow-500">NÍVEL MÁXIMO ATINGIDO</p>
+                        <p className="text-[9px] text-yellow-200/70">Você é uma lenda do Starbank.</p>
                     </div>
-                    <div className="p-3 bg-[#151020] border-t border-white/5">
-                        <button onClick={handleStartDuel} disabled={!selectedOpponentId} className={`w-full py-2 rounded-lg text-xs font-bold uppercase tracking-widest ${selectedOpponentId ? 'bg-purple-600 text-white shadow-lg' : 'bg-white/5 text-gray-600 cursor-not-allowed'}`}>Desafiar</button>
-                    </div>
-                </motion.div>
-            )}
-            </AnimatePresence>
+                )}
+            </motion.div>
         </div>
 
-        {/* LISTAGEM DE TIME / HISTÓRICO */}
+        {/* LISTAGEM DE TIME + PLANETA */}
         <div className="col-span-12 lg:col-span-8 h-full flex flex-col">
              <div className="flex gap-4 mb-4 border-b border-white/5 pb-1">
                 <button onClick={() => setActiveTab('team')} className={`pb-2 text-xs font-bold uppercase tracking-widest transition-all flex items-center gap-2 ${activeTab === 'team' ? 'text-yellow-500 border-b-2 border-yellow-500' : 'text-gray-500 hover:text-white'}`}>
@@ -368,47 +357,46 @@ export const SupervisorDashboard = () => {
                 </button>
              </div>
 
-             <div className="flex-1 bg-[#0a0510]/80 backdrop-blur-xl border border-white/10 rounded-3xl overflow-hidden shadow-2xl relative">
+             <div className="flex-1 bg-[#0a0510]/80 backdrop-blur-xl border border-white/10 rounded-3xl overflow-hidden shadow-2xl relative flex flex-col">
                 {activeTab === 'team' ? (
-                    <div className="h-full flex flex-col">
-                        <div className="p-4 border-b border-white/5 bg-[#151020]/50 flex justify-between items-center">
-                            <div className="relative w-64">
-                                <Search className="absolute left-3 top-2.5 text-gray-500 w-4 h-4" />
-                                <input type="text" placeholder="Pesquisar qualquer agente..." className="w-full bg-black/40 border border-white/10 rounded-xl pl-10 pr-4 py-2 text-xs text-white focus:border-yellow-500 outline-none" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
-                            </div>
-                            <div className="flex gap-2 text-[9px] font-mono text-gray-500">
-                                <span>TOTAL AGENTES: {teamAgents.length}</span>
-                                <span className="text-green-500">ONLINE: {teamAgents.filter(a => a.status === 'online').length}</span>
-                            </div>
+                    <div className="h-full flex flex-col p-4">
+                        
+                        {/* --- AQUI ESTÁ O PLANETA (TERRAFORMAÇÃO) --- */}
+                        <PlanetView progress={planetProgress} />
+
+                        {/* Barra de Pesquisa */}
+                        <div className="relative mb-4">
+                            <Search className="absolute left-3 top-2.5 text-gray-500 w-4 h-4" />
+                            <input type="text" placeholder="Pesquisar agente..." className="w-full bg-black/40 border border-white/10 rounded-xl pl-10 pr-4 py-2 text-xs text-white focus:border-yellow-500 outline-none" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
                         </div>
-                        <div className="flex-1 overflow-y-auto p-2 custom-scrollbar space-y-2">
+
+                        {/* Lista de Agentes */}
+                        <div className="flex-1 overflow-y-auto custom-scrollbar space-y-2 pr-2">
                             {filteredTeam.map((agent, index) => {
                                 const agentTotal = agent.sales_total || 0;
-                                const agentNextGoal = GOALS.find(g => g > agentTotal) || GOALS[GOALS.length - 1];
-                                const agentProgress = Math.min(100, (agentTotal / agentNextGoal) * 100);
+                                // Calcula patente de cada agente para exibir
+                                const agentRank = RANKS.slice().reverse().find(r => agentTotal >= r.threshold) || RANKS[0];
                                 const isLeader = index === 0 && agentTotal > 0;
 
                                 return (
                                     <motion.div key={agent.id} initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0, transition: { delay: index * 0.05 } }}
-                                        className={`p-4 rounded-2xl border transition-all ${isLeader ? 'bg-gradient-to-r from-yellow-900/20 to-transparent border-yellow-500/30' : 'bg-white/5 border-transparent hover:bg-white/10'}`}
+                                        className={`p-3 rounded-xl border transition-all flex items-center justify-between ${isLeader ? 'bg-gradient-to-r from-yellow-900/20 to-transparent border-yellow-500/30' : 'bg-white/5 border-transparent hover:bg-white/10'}`}
                                     >
-                                        <div className="flex items-center justify-between mb-2">
-                                            <div className="flex items-center gap-4">
-                                                <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-black text-sm ${isLeader ? 'bg-yellow-500 text-black' : 'bg-gray-800 text-gray-400'}`}>{index + 1}</div>
-                                                <div>
-                                                    <p className={`text-sm font-bold flex items-center gap-2 ${isLeader ? 'text-yellow-400' : 'text-white'}`}>
-                                                        {agent.name} {agent.id === userProfile?.id && <span className="text-[9px] bg-purple-900/50 text-purple-300 px-1 rounded border border-purple-500/20">VOCÊ</span>}
-                                                    </p>
-                                                    <p className="text-[9px] text-gray-500 uppercase">{agent.role}</p>
+                                        <div className="flex items-center gap-3">
+                                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-black text-xs ${isLeader ? 'bg-yellow-500 text-black' : 'bg-gray-800 text-gray-400'}`}>{index + 1}</div>
+                                            <div>
+                                                <p className={`text-xs font-bold flex items-center gap-2 ${isLeader ? 'text-yellow-400' : 'text-white'}`}>
+                                                    {agent.name} 
+                                                    {agent.id === userProfile?.id && <span className="text-[8px] bg-purple-900/50 text-purple-300 px-1 rounded border border-purple-500/20">VOCÊ</span>}
+                                                </p>
+                                                <div className="flex items-center gap-1">
+                                                    <agentRank.icon size={10} className={agentRank.color} />
+                                                    <p className="text-[9px] text-gray-500 uppercase">{agentRank.name}</p>
                                                 </div>
                                             </div>
-                                            <div className="text-right">
-                                                <p className={`font-mono font-bold ${isLeader ? 'text-yellow-400 text-lg' : 'text-gray-300'}`}>{formatCurrency(agentTotal)}</p>
-                                                <p className="text-[9px] text-gray-600">Meta: {formatK(agentNextGoal)}</p>
-                                            </div>
                                         </div>
-                                        <div className="w-full h-1.5 bg-black rounded-full overflow-hidden flex items-center">
-                                            <div className={`h-full rounded-full ${isLeader ? 'bg-yellow-500' : 'bg-purple-600'}`} style={{ width: `${agentProgress}%` }}></div>
+                                        <div className="text-right">
+                                            <p className={`font-mono font-bold text-sm ${isLeader ? 'text-yellow-400' : 'text-gray-300'}`}>{formatCurrency(agentTotal)}</p>
                                         </div>
                                     </motion.div>
                                 );
@@ -441,5 +429,3 @@ export const SupervisorDashboard = () => {
     </div>
   );
 };
-
-//Atualizando duelo real
