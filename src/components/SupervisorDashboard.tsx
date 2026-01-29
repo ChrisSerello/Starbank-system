@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Rocket, Target, DollarSign, Zap, TrendingUp, LogOut, User, Cpu, Activity, Swords, Search, Crown, Trophy, LayoutDashboard, Eye, ShieldCheck, Database, Server, BarChart3, History, CheckCircle2, Crosshair, StopCircle } from 'lucide-react';
+import { Rocket, Target, DollarSign, Zap, LogOut, User, Cpu, Swords, Search, Crown, LayoutDashboard, History, ShieldCheck, Crosshair, StopCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../supabase';
@@ -45,7 +45,7 @@ export const SupervisorDashboard = () => {
   const [formData, setFormData] = useState({ client: '', agreement: '', product: 'Empréstimo', value: '' });
 
   // ESTADOS DE INTERFACE
-  const [activeTab, setActiveTab] = useState<'history' | 'team'>('team'); // Padrão: Visão de Equipe
+  const [activeTab, setActiveTab] = useState<'history' | 'team'>('team');
   const [searchQuery, setSearchQuery] = useState('');
 
   // ESTADOS DO DUELO
@@ -60,20 +60,16 @@ export const SupervisorDashboard = () => {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) { navigate('/'); return; }
 
-        // Carregar Perfil
         const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).single();
         setUserProfile(profile);
 
-        // Carregar Minhas Vendas
         const { data: mySales } = await supabase.from('sales').select('*').eq('user_id', user.id).order('created_at', { ascending: false });
         if (mySales) setSales(mySales);
 
-        // Carregar Time Completo
         fetchTeamData(user.id);
     };
     init();
 
-    // Realtime
     const sub = supabase.channel('supervisor-global').on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => {
         if(userProfile) fetchTeamData(userProfile.id);
     }).subscribe();
@@ -85,6 +81,12 @@ export const SupervisorDashboard = () => {
       const { data } = await supabase.from('profiles').select('*').order('sales_total', { ascending: false });
       if (data) setTeamAgents(data);
   }
+
+  // --- FUNÇÃO DE LOGOUT CORRIGIDA ---
+  const handleLogout = async () => {
+    await supabase.auth.signOut(); // Avisa o banco que saiu
+    navigate('/'); // Depois redireciona
+  };
 
   // CÁLCULOS
   const totalSales = useMemo(() => sales.reduce((acc, curr) => acc + Number(curr.value), 0), [sales]);
@@ -103,7 +105,7 @@ export const SupervisorDashboard = () => {
     const { data, error } = await supabase.from('sales').insert([{
         user_id: userProfile.id,
         client_name: formData.client,
-        agreement: formData.agreement, // AGORA O CONVÊNIO VAI PRO BANCO
+        agreement: formData.agreement,
         product: formData.product,
         value: val
     }]).select();
@@ -132,7 +134,6 @@ export const SupervisorDashboard = () => {
 
   return (
     <div className="min-h-screen relative font-sans text-white overflow-hidden bg-[#020005]">
-      {/* Background */}
       <div className="fixed inset-0 bg-[size:400%_400%] animate-nebula-flow bg-gradient-to-br from-[#0f0014] via-[#05000a] to-[#000000] -z-20"></div>
       <div className="fixed inset-0 cyber-grid opacity-10 mix-blend-screen -z-10"></div>
       <div className="scanline opacity-20"></div>
@@ -141,7 +142,7 @@ export const SupervisorDashboard = () => {
         <img src="https://cdn-icons-png.flaticon.com/512/2026/2026465.png" alt="Mascote" className="w-full h-full object-contain" style={{filter: 'hue-rotate(45deg)'}} />
       </motion.div>
 
-      {/* HEADER */}
+      {/* HEADER COM LOGOUT CORRIGIDO */}
       <header className="fixed top-0 w-full z-50 px-6 py-3 bg-[#0a0510]/90 backdrop-blur-xl border-b border-yellow-500/10 flex justify-between items-center shadow-2xl">
         <div className="flex items-center gap-4">
             <div className="relative group">
@@ -153,7 +154,7 @@ export const SupervisorDashboard = () => {
             <div>
                 <h1 className="text-xl font-black tracking-[0.2em] text-white leading-none">STAR<span className="text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-purple-600">BANK</span></h1>
                 <p className="text-[9px] text-yellow-600/80 font-mono tracking-[0.4em] uppercase mt-1 flex items-center gap-2">
-                    <span className="w-1.5 h-1.5 bg-yellow-500 rounded-full animate-pulse"></span> Supreme Access
+                    <span className="w-1.5 h-1.5 bg-yellow-500 rounded-full animate-pulse"></span> Supervisor
                 </p>
             </div>
         </div>
@@ -164,7 +165,8 @@ export const SupervisorDashboard = () => {
                 </div>
                 <div className="text-[9px] text-gray-500 font-mono">GOD MODE ENABLED</div>
             </div>
-            <button onClick={() => navigate('/')} className="p-2 rounded-lg bg-white/5 hover:bg-red-900/20 text-gray-400 hover:text-red-400 transition-all border border-white/5 hover:border-red-500/30">
+            {/* BOTÃO CORRIGIDO AQUI: */}
+            <button onClick={handleLogout} className="p-2 rounded-lg bg-white/5 hover:bg-red-900/20 text-gray-400 hover:text-red-400 transition-all border border-white/5 hover:border-red-500/30 cursor-pointer">
                 <LogOut size={18} />
             </button>
         </div>
@@ -172,7 +174,6 @@ export const SupervisorDashboard = () => {
 
       <main className="pt-24 px-6 pb-10 max-w-[1800px] mx-auto grid grid-cols-12 gap-6 relative z-10 h-screen overflow-y-auto custom-scrollbar">
         
-        {/* KPIS */}
         <div className="col-span-12 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
             <KpiCardHolo title="Suas Vendas" value={formatCurrency(totalSales)} icon={Target} colorName="gold" delay={0.1} />
             <KpiCardHolo title="Sua Comissão" value={formatCurrency(commission)} icon={DollarSign} colorName="green" delay={0.2} />
@@ -194,27 +195,21 @@ export const SupervisorDashboard = () => {
             </motion.div>
         </div>
 
-        {/* COLUNA ESQUERDA */}
         <div className="col-span-12 lg:col-span-4 space-y-6">
-            
-            {/* INPUT DE VENDA (AGORA COM CONVÊNIO) */}
             <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.4 }} className="holo-card rounded-3xl p-6 bg-[#0a0510]/80 border border-yellow-500/20 relative group">
                 <div className="absolute inset-0 bg-gradient-to-tr from-yellow-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-700 pointer-events-none"></div>
-                <h2 className="text-sm font-black text-yellow-500 mb-5 flex items-center gap-2 tracking-wider uppercase"><Rocket size={16}/> Lançar Venda (Master)</h2>
+                <h2 className="text-sm font-black text-yellow-500 mb-5 flex items-center gap-2 tracking-wider uppercase"><Rocket size={16}/> Lançar Venda</h2>
                 
                 <form onSubmit={handleSubmit} className="space-y-4 font-mono">
-                    
-                    {/* Linha 1: Cliente */}
                     <div className="space-y-1">
                         <label className="text-[9px] text-gray-500 uppercase font-bold ml-1">Cliente</label>
                         <input type="text" placeholder="Nome Completo" value={formData.client} onChange={e => setFormData({...formData, client: e.target.value})} className="w-full bg-[#151020] border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:border-yellow-500 outline-none transition-all" />
                     </div>
 
-                    {/* Linha 2: Convênio e Produto */}
                     <div className="grid grid-cols-2 gap-3">
                         <div className="space-y-1">
                             <label className="text-[9px] text-gray-500 uppercase font-bold ml-1">Convênio</label>
-                            <input type="text" placeholder="Ex: INSS" value={formData.agreement} onChange={e => setFormData({...formData, agreement: e.target.value})} className="w-full bg-[#151020] border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:border-yellow-500 outline-none transition-all" />
+                            <input type="text" placeholder="Ex: Barcarena" value={formData.agreement} onChange={e => setFormData({...formData, agreement: e.target.value})} className="w-full bg-[#151020] border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:border-yellow-500 outline-none transition-all" />
                         </div>
                         <div className="space-y-1">
                             <label className="text-[9px] text-gray-500 uppercase font-bold ml-1">Produto</label>
@@ -222,7 +217,6 @@ export const SupervisorDashboard = () => {
                         </div>
                     </div>
 
-                    {/* Linha 3: Valor */}
                     <div className="space-y-1">
                         <label className="text-[9px] text-gray-500 uppercase font-bold ml-1">Valor (R$)</label>
                         <input type="number" step="0.01" placeholder="0.00" value={formData.value} onChange={e => setFormData({...formData, value: e.target.value})} className="w-full bg-[#151020] border border-white/10 rounded-xl px-4 py-3 text-lg font-bold text-white focus:border-green-500 outline-none" />
@@ -234,7 +228,6 @@ export const SupervisorDashboard = () => {
                 </form>
             </motion.div>
 
-            {/* DUELOS */}
             <AnimatePresence mode="wait">
             {activeDuel ? (
                  <motion.div initial={{ opacity: 0, scaleY: 0 }} animate={{ opacity: 1, scaleY: 1 }} className="holo-card rounded-3xl p-6 border border-red-500/30 relative overflow-hidden flex flex-col">
@@ -279,11 +272,10 @@ export const SupervisorDashboard = () => {
             </AnimatePresence>
         </div>
 
-        {/* COLUNA DIREITA */}
         <div className="col-span-12 lg:col-span-8 h-full flex flex-col">
              <div className="flex gap-4 mb-4 border-b border-white/5 pb-1">
                 <button onClick={() => setActiveTab('team')} className={`pb-2 text-xs font-bold uppercase tracking-widest transition-all flex items-center gap-2 ${activeTab === 'team' ? 'text-yellow-500 border-b-2 border-yellow-500' : 'text-gray-500 hover:text-white'}`}>
-                    <LayoutDashboard size={14}/> Visão Global (Raio-X)
+                    <LayoutDashboard size={14}/> Visão Global
                 </button>
                 <button onClick={() => setActiveTab('history')} className={`pb-2 text-xs font-bold uppercase tracking-widest transition-all flex items-center gap-2 ${activeTab === 'history' ? 'text-yellow-500 border-b-2 border-yellow-500' : 'text-gray-500 hover:text-white'}`}>
                     <History size={14}/> Meu Histórico
