@@ -81,19 +81,17 @@ export const SupervisorDashboard = () => {
     init();
 
     // CANAL DE TEMPO REAL (O SEGREDO DO DUELO)
-    const channel = supabase.channel('starbank-realtime')
+    const channel = supabase.channel('starbank-global')
         // Escuta Vendas (para atualizar ranking)
         .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => {
             fetchTeamData();
+            // Se houver duelo ativo, atualiza ele também pois as vendas mudaram
+            if (myUserId) fetchActiveDuel(myUserId);
         })
-        // Escuta Duelos (INSERT e DELETE)
+        // Escuta Duelos (Novos desafios ou cancelamentos)
         .on('postgres_changes', { event: '*', schema: 'public', table: 'duels' }, (payload) => {
-            // Verifica se o duelo envolve o usuário atual
-            const duel = payload.new as any || payload.old as any;
-            if (myUserId && (duel.challenger_id === myUserId || duel.opponent_id === myUserId)) {
-                console.log("Alteração no duelo detectada!", payload);
-                fetchActiveDuel(myUserId);
-            }
+            console.log(" Mudança no Duelo detectada:", payload);
+            if (myUserId) fetchActiveDuel(myUserId);
         })
         .subscribe();
 
@@ -112,9 +110,9 @@ export const SupervisorDashboard = () => {
         .from('duels')
         .select('*')
         .or(`challenger_id.eq.${myId},opponent_id.eq.${myId}`)
-        .single();
+        .maybeSingle(); // Usa maybeSingle para não dar erro se não tiver nenhum
       
-      setActiveDuelData(data); // Se não tiver nada, data vem null (o que é correto)
+      setActiveDuelData(data); 
   };
 
   const handleLogout = async () => {
@@ -139,6 +137,7 @@ export const SupervisorDashboard = () => {
     const opponentId = isChallenger ? activeDuelData.opponent_id : activeDuelData.challenger_id;
     const opponent = teamAgents.find(a => a.id === opponentId);
 
+    // Se o oponente não for encontrado na lista (ex: foi deletado), ignora
     if (!opponent) return null;
 
     return {
@@ -174,7 +173,7 @@ export const SupervisorDashboard = () => {
         
         // 3. Atualiza localmente
         fetchTeamData();
-        if(duelInfo) fetchActiveDuel(userProfile.id);
+        if(userProfile) fetchActiveDuel(userProfile.id);
     }
   };
 
@@ -184,16 +183,20 @@ export const SupervisorDashboard = () => {
         const opponent = teamAgents.find(op => op.id === selectedOpponentId);
         
         // Insere no banco
-        await supabase.from('duels').insert([{
+        const { error } = await supabase.from('duels').insert([{
             challenger_id: userProfile.id,
             opponent_id: selectedOpponentId,
             goal: selectedGoal
         }]);
 
-        setSentNotification({ show: true, name: opponent?.name || '' });
-        setTimeout(() => setSentNotification({ show: false, name: '' }), 3000);
-        setSelectedOpponentId(null);
-        // O Realtime vai atualizar a tela automaticamente
+        if (!error) {
+            setSentNotification({ show: true, name: opponent?.name || '' });
+            setTimeout(() => setSentNotification({ show: false, name: '' }), 3000);
+            setSelectedOpponentId(null);
+            // O Realtime vai atualizar a tela automaticamente em alguns milissegundos
+        } else {
+            alert("Erro ao criar duelo. Verifique se já não existe um ativo.");
+        }
     }
   };
 
