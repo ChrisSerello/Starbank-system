@@ -157,7 +157,7 @@ export const SupervisorDashboard = () => {
   const formatCurrency = (val: number) => val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
   const formatK = (val: number) => `R$ ${val / 1000}k`;
 
-  // --- LÓGICA DE PATENTES (RANK SYSTEM) ---
+  // --- LÓGICA DE PATENTES
   const currentRankIndex = RANKS.slice().reverse().findIndex(r => totalSales >= r.threshold);
   const rankIndex = currentRankIndex >= 0 ? RANKS.length - 1 - currentRankIndex : 0;
   const currentRank = RANKS[rankIndex];
@@ -223,7 +223,7 @@ export const SupervisorDashboard = () => {
             <div>
                 <h1 className="text-xl font-black tracking-[0.2em] text-white leading-none">STAR<span className="text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-purple-600">BANK</span></h1>
                 <p className="text-[9px] text-yellow-600/80 font-mono tracking-[0.4em] uppercase mt-1 flex items-center gap-2">
-                    <span className="w-1.5 h-1.5 bg-yellow-500 rounded-full animate-pulse"></span> Supreme Access
+                    <span className="w-1.5 h-1.5 bg-yellow-500 rounded-full animate-pulse"></span> SUPERVISOR
                 </p>
             </div>
         </div>
@@ -232,7 +232,7 @@ export const SupervisorDashboard = () => {
                 <div className="text-xs font-bold text-white flex items-center justify-end gap-2">
                     {userProfile?.name || 'Supervisor'} <Crown size={14} className="text-yellow-500 fill-yellow-500"/>
                 </div>
-                <div className="text-[9px] text-gray-500 font-mono">GOD MODE ENABLED</div>
+                <div className="text-[9px] text-gray-500 font-mono">BEM VINDO(A)</div>
             </div>
             <button onClick={handleLogout} className="p-2 rounded-lg bg-white/5 hover:bg-red-900/20 text-gray-400 hover:text-red-400 transition-all border border-white/5 hover:border-red-500/30 cursor-pointer">
                 <LogOut size={18} />
@@ -285,7 +285,7 @@ export const SupervisorDashboard = () => {
                     <div className="grid grid-cols-2 gap-3">
                         <div className="space-y-1">
                             <label className="text-[9px] text-gray-500 uppercase font-bold ml-1">Convênio</label>
-                            <input type="text" placeholder="Ex: INSS" value={formData.agreement} onChange={e => setFormData({...formData, agreement: e.target.value})} className="w-full bg-[#151020] border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:border-yellow-500 outline-none transition-all" />
+                            <input type="text" placeholder="Ex: BARCARENA" value={formData.agreement} onChange={e => setFormData({...formData, agreement: e.target.value})} className="w-full bg-[#151020] border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:border-yellow-500 outline-none transition-all" />
                         </div>
                         <div className="space-y-1">
                             <label className="text-[9px] text-gray-500 uppercase font-bold ml-1">Produto</label>
@@ -350,7 +350,7 @@ export const SupervisorDashboard = () => {
         <div className="col-span-12 lg:col-span-8 h-full flex flex-col">
              <div className="flex gap-4 mb-4 border-b border-white/5 pb-1">
                 <button onClick={() => setActiveTab('team')} className={`pb-2 text-xs font-bold uppercase tracking-widest transition-all flex items-center gap-2 ${activeTab === 'team' ? 'text-yellow-500 border-b-2 border-yellow-500' : 'text-gray-500 hover:text-white'}`}>
-                    <LayoutDashboard size={14}/> Visão Global (Raio-X)
+                    <LayoutDashboard size={14}/> Visão Global
                 </button>
                 <button onClick={() => setActiveTab('history')} className={`pb-2 text-xs font-bold uppercase tracking-widest transition-all flex items-center gap-2 ${activeTab === 'history' ? 'text-yellow-500 border-b-2 border-yellow-500' : 'text-gray-500 hover:text-white'}`}>
                     <History size={14}/> Meu Histórico
