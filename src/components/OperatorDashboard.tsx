@@ -13,8 +13,8 @@ const RANKS = [
   { name: 'Almirante da Frota', threshold: 100000, icon: Crown, color: 'text-yellow-400', bg: 'bg-yellow-500' },
 ];
 
-// --- META DA EQUIPE (PLANETA) ---
-const TEAM_MISSION_GOAL = 500000;
+// --- META INDIVIDUAL DO PLANETA (R$ 150k para terraformar tudo) ---
+const PERSONAL_PLANET_GOAL = 150000;
 
 // --- COMPONENTES VISUAIS ---
 const MiniHoloChart = ({ color }: { color: string }) => {
@@ -45,8 +45,8 @@ const KpiCardHolo = ({ title, value, icon: Icon, colorName, delay }: any) => {
     );
 };
 
-// --- COMPONENTE DO PLANETA (TERRAFORMAÇÃO) ---
-const PlanetView = ({ progress }: { progress: number }) => {
+// --- COMPONENTE DO PLANETA (COM ANIMAÇÃO DE VENDA) ---
+const PlanetView = ({ progress, isAnimating }: { progress: number, isAnimating: boolean }) => {
     let planetClass = "from-gray-800 to-gray-900"; 
     let atmosphereClass = "opacity-0";
     let statusText = "PLANETA MORTO";
@@ -75,21 +75,37 @@ const PlanetView = ({ progress }: { progress: number }) => {
         <div className="relative w-full h-48 flex items-center justify-center overflow-hidden rounded-2xl bg-[#0a0a15]/60 border border-cyan-500/20 mb-4 group shadow-[0_0_30px_rgba(0,0,0,0.5)]">
             <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] opacity-30"></div>
             
+            {/* O Planeta */}
             <motion.div 
-                className={`relative w-24 h-24 rounded-full bg-gradient-to-br ${planetClass} shadow-[inset_-10px_-10px_20px_rgba(0,0,0,1)] transition-all duration-1000`}
-                animate={{ rotate: 360 }}
-                transition={{ duration: 100, repeat: Infinity, ease: "linear" }}
+                className={`relative w-24 h-24 rounded-full bg-gradient-to-br ${planetClass} shadow-[inset_-10px_-10px_20px_rgba(0,0,0,1)]`}
+                // ANIMAÇÃO DE GIRO E PULSO
+                animate={isAnimating ? { 
+                    rotate: [0, 360], 
+                    scale: [1, 1.2, 1],
+                    filter: ["brightness(1)", "brightness(2)", "brightness(1)"]
+                } : { 
+                    rotate: 360 
+                }}
+                transition={isAnimating ? { duration: 2, ease: "easeInOut" } : { duration: 100, repeat: Infinity, ease: "linear" }}
             >
                 <div className={`absolute inset-[-5px] rounded-full blur-md transition-all duration-1000 ${atmosphereClass}`}></div>
                 <div className="absolute inset-0 opacity-30 bg-[url('https://www.transparenttextures.com/patterns/black-scales.png')] mix-blend-multiply rounded-full"></div>
             </motion.div>
 
+            {/* Efeitos de Partículas quando vende */}
+            {isAnimating && (
+                <>
+                    <motion.div initial={{ scale: 0, opacity: 1 }} animate={{ scale: 2, opacity: 0 }} transition={{ duration: 1 }} className="absolute w-24 h-24 rounded-full border-2 border-cyan-400"></motion.div>
+                    <motion.div initial={{ scale: 0, opacity: 1 }} animate={{ scale: 3, opacity: 0 }} transition={{ duration: 1.5 }} className="absolute w-24 h-24 rounded-full border border-white"></motion.div>
+                </>
+            )}
+
             <div className="absolute top-3 left-3">
-                 <div className="text-[9px] text-cyan-500 font-mono flex items-center gap-1"><Globe size={10}/> TERRAFORMAÇÃO</div>
+                 <div className="text-[9px] text-cyan-500 font-mono flex items-center gap-1"><Globe size={10}/> MEU MUNDO</div>
                  <div className="text-xl font-black text-white">{progress.toFixed(1)}%</div>
             </div>
              <div className="absolute bottom-3 right-3 text-right">
-                 <div className="text-[9px] text-gray-500 font-mono">STATUS DA FROTA</div>
+                 <div className="text-[9px] text-gray-500 font-mono">STATUS DA COLÔNIA</div>
                  <div className={`text-[10px] font-bold tracking-widest ${progress >= 100 ? 'text-yellow-400 animate-pulse' : 'text-blue-400'}`}>{statusText}</div>
             </div>
         </div>
@@ -103,8 +119,10 @@ export const OperatorDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [sales, setSales] = useState<any[]>([]);
   const [userProfile, setUserProfile] = useState<any>(null);
-  const [teamAgents, setTeamAgents] = useState<any[]>([]);
   const [formData, setFormData] = useState({ client: '', agreement: '', product: 'Empréstimo', value: '' });
+  
+  // ESTADO DA ANIMAÇÃO DO PLANETA
+  const [planetAnimating, setPlanetAnimating] = useState(false);
 
   useEffect(() => {
     const loadData = async () => {
@@ -116,29 +134,15 @@ export const OperatorDashboard = () => {
 
         const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).single();
         setUserProfile(profile);
-
-        const { data: allProfiles } = await supabase.from('profiles').select('sales_total');
-        if (allProfiles) setTeamAgents(allProfiles);
         
         setLoading(false);
     };
     loadData();
-
-    const channel = supabase.channel('operator-global')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, async () => {
-             const { data } = await supabase.from('profiles').select('sales_total');
-             if(data) setTeamAgents(data);
-        })
-        .subscribe();
-    
-    return () => { supabase.removeChannel(channel); }
-
   }, [navigate]);
 
-  // --- FUNÇÃO DE LOGOUT CORRIGIDA ---
   const handleLogout = async () => {
-    await supabase.auth.signOut(); // Desloga do Banco
-    navigate('/'); // Redireciona para Login
+    await supabase.auth.signOut();
+    navigate('/');
   };
 
   // CÁLCULOS FINANCEIROS
@@ -172,20 +176,26 @@ export const OperatorDashboard = () => {
       distToNext = nextRank.threshold - totalSales;
   }
 
-  // --- CÁLCULO DO PLANETA (TIME) ---
-  const teamTotalSales = teamAgents.reduce((acc, curr) => acc + (curr.sales_total || 0), 0);
-  const planetProgress = Math.min(100, (teamTotalSales / TEAM_MISSION_GOAL) * 100);
+  // --- CÁLCULO DO PLANETA (INDIVIDUAL AGORA) ---
+  const planetProgress = Math.min(100, (totalSales / PERSONAL_PLANET_GOAL) * 100);
 
   // AÇÕES
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.value || !userProfile) return;
     const val = Number(formData.value);
+    
+    // Animação de envio
     const { data, error } = await supabase.from('sales').insert([{ user_id: userProfile.id, client_name: formData.client, agreement: formData.agreement, product: formData.product, value: val }]).select();
+    
     if (!error && data) {
         setSales([data[0], ...sales]);
         setFormData({ ...formData, client: '', value: '' });
         await supabase.from('profiles').update({ sales_total: totalSales + val }).eq('id', userProfile.id);
+        
+        // DISPARAR ANIMAÇÃO DO PLANETA
+        setPlanetAnimating(true);
+        setTimeout(() => setPlanetAnimating(false), 3000); // 3 segundos de efeito
     }
   };
 
@@ -225,7 +235,6 @@ export const OperatorDashboard = () => {
              <div className="text-xs font-bold text-white flex items-center justify-end gap-2"><User size={14} className="text-purple-400"/> {userProfile?.name || 'Agente'}</div>
              <div className="text-[10px] text-green-400 font-mono flex justify-end items-center gap-1">ONLINE <span className="text-gray-600">|</span> CONECTADO(A)</div>
            </div>
-           {/* AQUI ESTÁ A CORREÇÃO DO BOTÃO SAIR */}
            <button onClick={handleLogout} className="group holo-card p-2.5 rounded-lg text-red-400 hover:text-red-300 hover:border-red-500/50 transition-all active:scale-95"><LogOut size={18} /></button>
         </div>
       </header>
@@ -309,8 +318,8 @@ export const OperatorDashboard = () => {
              
              <div className="overflow-auto flex-1 p-4 relative z-10 bg-[#050510]/30 font-mono custom-scrollbar">
                
-               {/* --- PLANETA (TOPO DA LISTA) --- */}
-               <PlanetView progress={planetProgress} />
+               {/* --- PLANETA COM ANIMAÇÃO --- */}
+               <PlanetView progress={planetProgress} isAnimating={planetAnimating} />
 
                <table className="w-full text-left text-sm border-separate border-spacing-y-2 mt-4">
                  <thead className="text-[9px] text-cyan-500/70 uppercase tracking-[0.2em]"><tr><th className="p-3 pl-5">Data</th><th className="p-3">Cliente</th><th className="p-3">Ativo</th><th className="p-3 text-right">Valor</th><th className="p-3"></th></tr></thead>
