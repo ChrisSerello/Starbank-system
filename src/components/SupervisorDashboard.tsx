@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Rocket, Target, DollarSign, Zap, LogOut, Search, Crown, LayoutDashboard, History, ShieldCheck, Trophy, Medal, Star, Globe, ChevronRight, Loader2 } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { Rocket, Target, DollarSign, Zap, LogOut, Search, Crown, LayoutDashboard, History, ShieldCheck, Medal, Star, Globe, Loader2, Activity } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../supabase';
 
@@ -13,7 +13,7 @@ const RANKS = [
   { name: 'Almirante da Frota', threshold: 100000, icon: Crown, color: 'text-yellow-400', bg: 'bg-yellow-500' },
 ];
 
-// --- META DA EQUIPE (PLANETA) ---
+// --- META DA EQUIPE (PLANETA GIGANTE) ---
 const TEAM_MISSION_GOAL = 500000;
 
 // --- COMPONENTES VISUAIS ---
@@ -44,10 +44,9 @@ const KpiCardHolo = ({ title, value, icon: Icon, colorName, delay }: any) => {
     );
 };
 
-// --- COMPONENTE DO PLANETA (TERRAFORMAÇÃO) ---
-const PlanetView = ({ progress }: { progress: number }) => {
-    // Define a aparência do planeta baseado no progresso
-    let planetClass = "from-gray-800 to-gray-900"; // Fase 0: Rocha Morta
+// --- COMPONENTE DO PLANETA (COM EFEITOS) ---
+const PlanetView = ({ progress, isAnimating }: { progress: number, isAnimating: boolean }) => {
+    let planetClass = "from-gray-800 to-gray-900"; 
     let atmosphereClass = "opacity-0";
     let statusText = "PLANETA MORTO";
     
@@ -79,8 +78,15 @@ const PlanetView = ({ progress }: { progress: number }) => {
             {/* O Planeta */}
             <motion.div 
                 className={`relative w-24 h-24 rounded-full bg-gradient-to-br ${planetClass} shadow-[inset_-10px_-10px_20px_rgba(0,0,0,1)] transition-all duration-1000`}
-                animate={{ rotate: 360 }}
-                transition={{ duration: 100, repeat: Infinity, ease: "linear" }}
+                // ANIMAÇÃO DE GIRO E PULSO (IGUAL AO OPERADOR)
+                animate={isAnimating ? { 
+                    rotate: [0, 360], 
+                    scale: [1, 1.2, 1],
+                    filter: ["brightness(1)", "brightness(2)", "brightness(1)"]
+                } : { 
+                    rotate: 360 
+                }}
+                transition={isAnimating ? { duration: 2, ease: "easeInOut" } : { duration: 100, repeat: Infinity, ease: "linear" }}
             >
                 {/* Atmosfera */}
                 <div className={`absolute inset-[-5px] rounded-full blur-md transition-all duration-1000 ${atmosphereClass}`}></div>
@@ -88,9 +94,17 @@ const PlanetView = ({ progress }: { progress: number }) => {
                 <div className="absolute inset-0 opacity-30 bg-[url('https://www.transparenttextures.com/patterns/black-scales.png')] mix-blend-multiply rounded-full"></div>
             </motion.div>
 
+             {/* Efeitos de Partículas quando vende */}
+             {isAnimating && (
+                <>
+                    <motion.div initial={{ scale: 0, opacity: 1 }} animate={{ scale: 2, opacity: 0 }} transition={{ duration: 1 }} className="absolute w-24 h-24 rounded-full border-2 border-yellow-400"></motion.div>
+                    <motion.div initial={{ scale: 0, opacity: 1 }} animate={{ scale: 3, opacity: 0 }} transition={{ duration: 1.5 }} className="absolute w-24 h-24 rounded-full border border-white"></motion.div>
+                </>
+            )}
+
             {/* HUD Overlay */}
             <div className="absolute top-3 left-3">
-                 <div className="text-[9px] text-gray-500 font-mono flex items-center gap-1"><Globe size={10}/> TERRAFORMAÇÃO</div>
+                 <div className="text-[9px] text-gray-500 font-mono flex items-center gap-1"><Globe size={10}/> MUNDO DA FROTA</div>
                  <div className="text-xl font-black text-white">{progress.toFixed(1)}%</div>
             </div>
              <div className="absolute bottom-3 right-3 text-right">
@@ -111,9 +125,10 @@ export const SupervisorDashboard = () => {
   const [teamAgents, setTeamAgents] = useState<any[]>([]);
   const [formData, setFormData] = useState({ client: '', agreement: '', product: 'Empréstimo', value: '' });
 
-  // INTERFACE
+  // INTERFACE E ANIMAÇÃO
   const [activeTab, setActiveTab] = useState<'history' | 'team'>('team');
   const [searchQuery, setSearchQuery] = useState('');
+  const [planetAnimating, setPlanetAnimating] = useState(false);
 
   useEffect(() => {
     const init = async () => {
@@ -132,7 +147,7 @@ export const SupervisorDashboard = () => {
 
     init();
 
-    const channel = supabase.channel('starbank-global')
+    const channel = supabase.channel('starbank-supervisor')
         .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => {
             fetchTeamData();
         })
@@ -157,7 +172,7 @@ export const SupervisorDashboard = () => {
   const formatCurrency = (val: number) => val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
   const formatK = (val: number) => `R$ ${val / 1000}k`;
 
-  // --- LÓGICA DE PATENTES
+  // --- LÓGICA DE PATENTES (RANK SYSTEM) ---
   const currentRankIndex = RANKS.slice().reverse().findIndex(r => totalSales >= r.threshold);
   const rankIndex = currentRankIndex >= 0 ? RANKS.length - 1 - currentRankIndex : 0;
   const currentRank = RANKS[rankIndex];
@@ -174,7 +189,7 @@ export const SupervisorDashboard = () => {
       distToNext = nextRank.threshold - totalSales;
   }
 
-  // --- LÓGICA DO PLANETA ---
+  // --- LÓGICA DO PLANETA (TIME) ---
   const teamTotalSales = teamAgents.reduce((acc, curr) => acc + (curr.sales_total || 0), 0);
   const planetProgress = Math.min(100, (teamTotalSales / TEAM_MISSION_GOAL) * 100);
 
@@ -197,6 +212,10 @@ export const SupervisorDashboard = () => {
         setFormData({ ...formData, client: '', value: '' });
         await supabase.from('profiles').update({ sales_total: totalSales + val }).eq('id', userProfile.id);
         fetchTeamData();
+
+        // DISPARAR ANIMAÇÃO DO PLANETA (IGUAL OPERADOR)
+        setPlanetAnimating(true);
+        setTimeout(() => setPlanetAnimating(false), 3000);
     }
   };
 
@@ -223,7 +242,7 @@ export const SupervisorDashboard = () => {
             <div>
                 <h1 className="text-xl font-black tracking-[0.2em] text-white leading-none">STAR<span className="text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-purple-600">BANK</span></h1>
                 <p className="text-[9px] text-yellow-600/80 font-mono tracking-[0.4em] uppercase mt-1 flex items-center gap-2">
-                    <span className="w-1.5 h-1.5 bg-yellow-500 rounded-full animate-pulse"></span> SUPERVISOR
+                    <span className="w-1.5 h-1.5 bg-yellow-500 rounded-full animate-pulse"></span> Supreme Access
                 </p>
             </div>
         </div>
@@ -232,7 +251,7 @@ export const SupervisorDashboard = () => {
                 <div className="text-xs font-bold text-white flex items-center justify-end gap-2">
                     {userProfile?.name || 'Supervisor'} <Crown size={14} className="text-yellow-500 fill-yellow-500"/>
                 </div>
-                <div className="text-[9px] text-gray-500 font-mono">BEM VINDO(A)</div>
+                <div className="text-[9px] text-gray-500 font-mono">GOD MODE ENABLED</div>
             </div>
             <button onClick={handleLogout} className="p-2 rounded-lg bg-white/5 hover:bg-red-900/20 text-gray-400 hover:text-red-400 transition-all border border-white/5 hover:border-red-500/30 cursor-pointer">
                 <LogOut size={18} />
@@ -285,7 +304,7 @@ export const SupervisorDashboard = () => {
                     <div className="grid grid-cols-2 gap-3">
                         <div className="space-y-1">
                             <label className="text-[9px] text-gray-500 uppercase font-bold ml-1">Convênio</label>
-                            <input type="text" placeholder="Ex: BARCARENA" value={formData.agreement} onChange={e => setFormData({...formData, agreement: e.target.value})} className="w-full bg-[#151020] border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:border-yellow-500 outline-none transition-all" />
+                            <input type="text" placeholder="Ex: INSS" value={formData.agreement} onChange={e => setFormData({...formData, agreement: e.target.value})} className="w-full bg-[#151020] border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:border-yellow-500 outline-none transition-all" />
                         </div>
                         <div className="space-y-1">
                             <label className="text-[9px] text-gray-500 uppercase font-bold ml-1">Produto</label>
@@ -304,7 +323,7 @@ export const SupervisorDashboard = () => {
                 </form>
             </motion.div>
 
-            {/* --- RANK SYSTEM COMPLETO (ONDE ERA O DUELO) --- */}
+            {/* --- RANK SYSTEM COMPLETO --- */}
             <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.5 }} className="holo-card rounded-3xl p-6 bg-gradient-to-b from-[#101015] to-black border border-white/10 relative overflow-hidden">
                 <div className="flex justify-between items-center mb-4">
                     <h2 className="text-sm font-black text-white flex items-center gap-2 tracking-[0.2em] uppercase">
@@ -313,7 +332,6 @@ export const SupervisorDashboard = () => {
                     {nextRank && <span className="text-[9px] text-gray-500 font-mono">PRÓX: {nextRank.name.split(' ')[0]}</span>}
                 </div>
 
-                {/* Card da Patente */}
                 <div className="flex items-center gap-4 mb-4">
                     <div className={`w-16 h-16 rounded-2xl flex items-center justify-center ${currentRank.bg} text-black shadow-lg shadow-${currentRank.color.split('-')[1]}-500/20`}>
                          <currentRank.icon size={32} />
@@ -325,7 +343,6 @@ export const SupervisorDashboard = () => {
                     </div>
                 </div>
 
-                {/* Barra de XP */}
                 {nextRank ? (
                     <div className="space-y-2">
                          <div className="flex justify-between text-[10px] font-bold">
@@ -350,7 +367,7 @@ export const SupervisorDashboard = () => {
         <div className="col-span-12 lg:col-span-8 h-full flex flex-col">
              <div className="flex gap-4 mb-4 border-b border-white/5 pb-1">
                 <button onClick={() => setActiveTab('team')} className={`pb-2 text-xs font-bold uppercase tracking-widest transition-all flex items-center gap-2 ${activeTab === 'team' ? 'text-yellow-500 border-b-2 border-yellow-500' : 'text-gray-500 hover:text-white'}`}>
-                    <LayoutDashboard size={14}/> Visão Global
+                    <LayoutDashboard size={14}/> Visão Global (Raio-X)
                 </button>
                 <button onClick={() => setActiveTab('history')} className={`pb-2 text-xs font-bold uppercase tracking-widest transition-all flex items-center gap-2 ${activeTab === 'history' ? 'text-yellow-500 border-b-2 border-yellow-500' : 'text-gray-500 hover:text-white'}`}>
                     <History size={14}/> Meu Histórico
@@ -361,8 +378,8 @@ export const SupervisorDashboard = () => {
                 {activeTab === 'team' ? (
                     <div className="h-full flex flex-col p-4">
                         
-                        {/* --- AQUI ESTÁ O PLANETA (TERRAFORMAÇÃO) --- */}
-                        <PlanetView progress={planetProgress} />
+                        {/* --- AQUI ESTÁ O PLANETA (COM ANIMAÇÃO) --- */}
+                        <PlanetView progress={planetProgress} isAnimating={planetAnimating} />
 
                         {/* Barra de Pesquisa */}
                         <div className="relative mb-4">
