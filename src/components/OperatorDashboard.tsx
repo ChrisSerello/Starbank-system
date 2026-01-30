@@ -5,7 +5,6 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '../supabase';
 
 // --- CONFIGURAÇÃO DE NÍVEIS (PATENTES) ---
-// Mesma configuração do Supervisor para consistência
 const RANKS = [
   { name: 'Cadete Espacial', threshold: 0, icon: Star, color: 'text-gray-400', bg: 'bg-gray-500' },
   { name: 'Agente de Campo', threshold: 20000, icon: ShieldCheck, color: 'text-green-400', bg: 'bg-green-500' },
@@ -104,7 +103,7 @@ export const OperatorDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [sales, setSales] = useState<any[]>([]);
   const [userProfile, setUserProfile] = useState<any>(null);
-  const [teamAgents, setTeamAgents] = useState<any[]>([]); // Necessário para o planeta
+  const [teamAgents, setTeamAgents] = useState<any[]>([]);
   const [formData, setFormData] = useState({ client: '', agreement: '', product: 'Empréstimo', value: '' });
 
   useEffect(() => {
@@ -112,16 +111,12 @@ export const OperatorDashboard = () => {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) { navigate('/'); return; }
 
-        // 1. Carrega vendas pessoais
         const { data: salesData } = await supabase.from('sales').select('*').eq('user_id', user.id).order('created_at', { ascending: false });
         if (salesData) setSales(salesData);
 
-        // 2. Carrega perfil pessoal
         const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).single();
         setUserProfile(profile);
 
-        // 3. Carrega dados do time (Para o Planeta Global)
-        // O operador pode ler todos os perfis para ver o progresso coletivo
         const { data: allProfiles } = await supabase.from('profiles').select('sales_total');
         if (allProfiles) setTeamAgents(allProfiles);
         
@@ -129,7 +124,6 @@ export const OperatorDashboard = () => {
     };
     loadData();
 
-    // Realtime para atualizar o Planeta se alguém vender
     const channel = supabase.channel('operator-global')
         .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, async () => {
              const { data } = await supabase.from('profiles').select('sales_total');
@@ -140,6 +134,12 @@ export const OperatorDashboard = () => {
     return () => { supabase.removeChannel(channel); }
 
   }, [navigate]);
+
+  // --- FUNÇÃO DE LOGOUT CORRIGIDA ---
+  const handleLogout = async () => {
+    await supabase.auth.signOut(); // Desloga do Banco
+    navigate('/'); // Redireciona para Login
+  };
 
   // CÁLCULOS FINANCEIROS
   const totalSales = useMemo(() => sales.reduce((acc, curr) => acc + Number(curr.value), 0), [sales]);
@@ -225,7 +225,8 @@ export const OperatorDashboard = () => {
              <div className="text-xs font-bold text-white flex items-center justify-end gap-2"><User size={14} className="text-purple-400"/> {userProfile?.name || 'Agente'}</div>
              <div className="text-[10px] text-green-400 font-mono flex justify-end items-center gap-1">ONLINE <span className="text-gray-600">|</span> CONECTADO(A)</div>
            </div>
-           <button onClick={() => navigate('/')} className="group holo-card p-2.5 rounded-lg text-red-400 hover:text-red-300 hover:border-red-500/50 transition-all active:scale-95"><LogOut size={18} /></button>
+           {/* AQUI ESTÁ A CORREÇÃO DO BOTÃO SAIR */}
+           <button onClick={handleLogout} className="group holo-card p-2.5 rounded-lg text-red-400 hover:text-red-300 hover:border-red-500/50 transition-all active:scale-95"><LogOut size={18} /></button>
         </div>
       </header>
 
@@ -258,7 +259,7 @@ export const OperatorDashboard = () => {
             </form>
           </motion.div>
 
-          {/* --- NOVO: SISTEMA DE PATENTES (SUBSTITUI DUELO) --- */}
+          {/* --- SISTEMA DE PATENTES --- */}
           <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.6 }} className="holo-card rounded-3xl p-6 bg-gradient-to-b from-[#101015] to-[#050010] border border-white/10 relative overflow-hidden">
                 <div className="flex justify-between items-center mb-4">
                     <h2 className="text-sm font-black text-white flex items-center gap-2 tracking-[0.2em] uppercase">
@@ -308,7 +309,7 @@ export const OperatorDashboard = () => {
              
              <div className="overflow-auto flex-1 p-4 relative z-10 bg-[#050510]/30 font-mono custom-scrollbar">
                
-               {/* --- NOVO: PLANETA (TOPO DA LISTA) --- */}
+               {/* --- PLANETA (TOPO DA LISTA) --- */}
                <PlanetView progress={planetProgress} />
 
                <table className="w-full text-left text-sm border-separate border-spacing-y-2 mt-4">
