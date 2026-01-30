@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Rocket, Target, DollarSign, Zap, LogOut, Search, Crown, LayoutDashboard, History, ShieldCheck, Medal, Star, Globe, Loader2, Activity } from 'lucide-react';
+import { Rocket, Target, DollarSign, Zap, LogOut, Search, Crown, LayoutDashboard, History, ShieldCheck, Medal, Star, Globe, Loader2, Trash2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../supabase';
@@ -44,41 +44,38 @@ const KpiCardHolo = ({ title, value, icon: Icon, colorName, delay }: any) => {
     );
 };
 
-// --- COMPONENTE DO PLANETA (COM EFEITOS) ---
+// --- COMPONENTE DO PLANETA ---
 const PlanetView = ({ progress, isAnimating }: { progress: number, isAnimating: boolean }) => {
     let planetClass = "from-gray-800 to-gray-900"; 
     let atmosphereClass = "opacity-0";
     let statusText = "PLANETA MORTO";
     
     if (progress >= 25) { 
-        planetClass = "from-blue-900 to-gray-800"; // Fase 1: Água
+        planetClass = "from-blue-900 to-gray-800";
         statusText = "HIDROSFERA DETECTADA";
     }
     if (progress >= 50) {
-        planetClass = "from-green-800 via-blue-900 to-gray-900"; // Fase 2: Vida
+        planetClass = "from-green-800 via-blue-900 to-gray-900";
         atmosphereClass = "opacity-20 bg-blue-500";
         statusText = "VEGETAÇÃO EM CRESCIMENTO";
     }
     if (progress >= 75) {
-        planetClass = "from-green-600 via-blue-600 to-blue-900"; // Fase 3: Atmosfera
+        planetClass = "from-green-600 via-blue-600 to-blue-900";
         atmosphereClass = "opacity-40 bg-cyan-400";
         statusText = "ATMOSFERA ESTÁVEL";
     }
     if (progress >= 100) {
-        planetClass = "from-yellow-200 via-blue-500 to-green-500"; // Fase 4: Utopia (Luzes)
+        planetClass = "from-yellow-200 via-blue-500 to-green-500";
         atmosphereClass = "opacity-60 bg-yellow-200 shadow-[0_0_50px_rgba(255,255,0,0.3)]";
         statusText = "COLÔNIA ESTABELECIDA";
     }
 
     return (
         <div className="relative w-full h-48 flex items-center justify-center overflow-hidden rounded-2xl bg-[#05000a] border border-white/5 mb-4 group">
-            {/* Estrelas de fundo */}
             <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] opacity-30"></div>
             
-            {/* O Planeta */}
             <motion.div 
                 className={`relative w-24 h-24 rounded-full bg-gradient-to-br ${planetClass} shadow-[inset_-10px_-10px_20px_rgba(0,0,0,1)] transition-all duration-1000`}
-                // ANIMAÇÃO DE GIRO E PULSO (IGUAL AO OPERADOR)
                 animate={isAnimating ? { 
                     rotate: [0, 360], 
                     scale: [1, 1.2, 1],
@@ -88,13 +85,10 @@ const PlanetView = ({ progress, isAnimating }: { progress: number, isAnimating: 
                 }}
                 transition={isAnimating ? { duration: 2, ease: "easeInOut" } : { duration: 100, repeat: Infinity, ease: "linear" }}
             >
-                {/* Atmosfera */}
                 <div className={`absolute inset-[-5px] rounded-full blur-md transition-all duration-1000 ${atmosphereClass}`}></div>
-                {/* Textura simulada */}
                 <div className="absolute inset-0 opacity-30 bg-[url('https://www.transparenttextures.com/patterns/black-scales.png')] mix-blend-multiply rounded-full"></div>
             </motion.div>
 
-             {/* Efeitos de Partículas quando vende */}
              {isAnimating && (
                 <>
                     <motion.div initial={{ scale: 0, opacity: 1 }} animate={{ scale: 2, opacity: 0 }} transition={{ duration: 1 }} className="absolute w-24 h-24 rounded-full border-2 border-yellow-400"></motion.div>
@@ -102,7 +96,6 @@ const PlanetView = ({ progress, isAnimating }: { progress: number, isAnimating: 
                 </>
             )}
 
-            {/* HUD Overlay */}
             <div className="absolute top-3 left-3">
                  <div className="text-[9px] text-gray-500 font-mono flex items-center gap-1"><Globe size={10}/> MUNDO DA FROTA</div>
                  <div className="text-xl font-black text-white">{progress.toFixed(1)}%</div>
@@ -178,7 +171,6 @@ export const SupervisorDashboard = () => {
   const currentRank = RANKS[rankIndex];
   const nextRank = RANKS[rankIndex + 1];
   
-  // Progresso para a próxima patente
   let rankProgress = 100;
   let distToNext = 0;
   if (nextRank) {
@@ -213,9 +205,22 @@ export const SupervisorDashboard = () => {
         await supabase.from('profiles').update({ sales_total: totalSales + val }).eq('id', userProfile.id);
         fetchTeamData();
 
-        // DISPARAR ANIMAÇÃO DO PLANETA (IGUAL OPERADOR)
         setPlanetAnimating(true);
         setTimeout(() => setPlanetAnimating(false), 3000);
+    }
+  };
+
+  // --- FUNÇÃO DE DELETAR VENDA ---
+  const handleDeleteSale = async (id: string, val: number) => {
+    if(confirm("Tem certeza que deseja apagar essa venda?")) {
+        const { error } = await supabase.from('sales').delete().eq('id', id);
+        if (!error) {
+            setSales(prev => prev.filter(s => s.id !== id));
+            // Atualiza o total do perfil (desconta o valor)
+            await supabase.from('profiles').update({ sales_total: totalSales - val }).eq('id', userProfile?.id);
+            // Atualiza os dados do time (impacta no planeta)
+            fetchTeamData();
+        }
     }
   };
 
@@ -242,7 +247,7 @@ export const SupervisorDashboard = () => {
             <div>
                 <h1 className="text-xl font-black tracking-[0.2em] text-white leading-none">STAR<span className="text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-purple-600">BANK</span></h1>
                 <p className="text-[9px] text-yellow-600/80 font-mono tracking-[0.4em] uppercase mt-1 flex items-center gap-2">
-                    <span className="w-1.5 h-1.5 bg-yellow-500 rounded-full animate-pulse"></span> Supreme Access
+                    <span className="w-1.5 h-1.5 bg-yellow-500 rounded-full animate-pulse"></span> SUPERVISOR
                 </p>
             </div>
         </div>
@@ -251,7 +256,7 @@ export const SupervisorDashboard = () => {
                 <div className="text-xs font-bold text-white flex items-center justify-end gap-2">
                     {userProfile?.name || 'Supervisor'} <Crown size={14} className="text-yellow-500 fill-yellow-500"/>
                 </div>
-                <div className="text-[9px] text-gray-500 font-mono">GOD MODE ENABLED</div>
+                <div className="text-[9px] text-gray-500 font-mono"> BEM VINDO(A)</div>
             </div>
             <button onClick={handleLogout} className="p-2 rounded-lg bg-white/5 hover:bg-red-900/20 text-gray-400 hover:text-red-400 transition-all border border-white/5 hover:border-red-500/30 cursor-pointer">
                 <LogOut size={18} />
@@ -304,7 +309,7 @@ export const SupervisorDashboard = () => {
                     <div className="grid grid-cols-2 gap-3">
                         <div className="space-y-1">
                             <label className="text-[9px] text-gray-500 uppercase font-bold ml-1">Convênio</label>
-                            <input type="text" placeholder="Ex: INSS" value={formData.agreement} onChange={e => setFormData({...formData, agreement: e.target.value})} className="w-full bg-[#151020] border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:border-yellow-500 outline-none transition-all" />
+                            <input type="text" placeholder="Ex: BARCARENA" value={formData.agreement} onChange={e => setFormData({...formData, agreement: e.target.value})} className="w-full bg-[#151020] border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:border-yellow-500 outline-none transition-all" />
                         </div>
                         <div className="space-y-1">
                             <label className="text-[9px] text-gray-500 uppercase font-bold ml-1">Produto</label>
@@ -367,7 +372,7 @@ export const SupervisorDashboard = () => {
         <div className="col-span-12 lg:col-span-8 h-full flex flex-col">
              <div className="flex gap-4 mb-4 border-b border-white/5 pb-1">
                 <button onClick={() => setActiveTab('team')} className={`pb-2 text-xs font-bold uppercase tracking-widest transition-all flex items-center gap-2 ${activeTab === 'team' ? 'text-yellow-500 border-b-2 border-yellow-500' : 'text-gray-500 hover:text-white'}`}>
-                    <LayoutDashboard size={14}/> Visão Global (Raio-X)
+                    <LayoutDashboard size={14}/> Visão Global
                 </button>
                 <button onClick={() => setActiveTab('history')} className={`pb-2 text-xs font-bold uppercase tracking-widest transition-all flex items-center gap-2 ${activeTab === 'history' ? 'text-yellow-500 border-b-2 border-yellow-500' : 'text-gray-500 hover:text-white'}`}>
                     <History size={14}/> Meu Histórico
@@ -378,7 +383,7 @@ export const SupervisorDashboard = () => {
                 {activeTab === 'team' ? (
                     <div className="h-full flex flex-col p-4">
                         
-                        {/* --- AQUI ESTÁ O PLANETA (COM ANIMAÇÃO) --- */}
+                        {/* --- PLANETA (COM ANIMAÇÃO) --- */}
                         <PlanetView progress={planetProgress} isAnimating={planetAnimating} />
 
                         {/* Barra de Pesquisa */}
@@ -391,7 +396,7 @@ export const SupervisorDashboard = () => {
                         <div className="flex-1 overflow-y-auto custom-scrollbar space-y-2 pr-2">
                             {filteredTeam.map((agent, index) => {
                                 const agentTotal = agent.sales_total || 0;
-                                // Calcula patente de cada agente para exibir
+                                // Calcula patente de cada agente
                                 const agentRank = RANKS.slice().reverse().find(r => agentTotal >= r.threshold) || RANKS[0];
                                 const isLeader = index === 0 && agentTotal > 0;
 
@@ -423,7 +428,7 @@ export const SupervisorDashboard = () => {
                 ) : (
                     <div className="h-full overflow-auto p-4 custom-scrollbar">
                          <table className="w-full text-left text-sm border-separate border-spacing-y-2">
-                            <thead className="text-[9px] text-gray-500 uppercase tracking-widest"><tr><th className="p-2">Data</th><th className="p-2">Cliente</th><th className="p-2">Convênio</th><th className="p-2">Produto</th><th className="p-2 text-right">Valor</th></tr></thead>
+                            <thead className="text-[9px] text-gray-500 uppercase tracking-widest"><tr><th className="p-2">Data</th><th className="p-2">Cliente</th><th className="p-2">Convênio</th><th className="p-2">Produto</th><th className="p-2 text-right">Valor</th><th className="p-2"></th></tr></thead>
                             <tbody className="font-mono text-xs">
                                 {sales.map(sale => (
                                     <tr key={sale.id} className="bg-white/5 hover:bg-white/10">
@@ -431,7 +436,8 @@ export const SupervisorDashboard = () => {
                                         <td className="p-3 text-white font-sans font-bold">{sale.client_name}</td>
                                         <td className="p-3 text-gray-300">{sale.agreement || '-'}</td>
                                         <td className="p-3 text-purple-400">{sale.product}</td>
-                                        <td className="p-3 rounded-r-lg text-right text-green-400 font-bold">{formatCurrency(sale.value)}</td>
+                                        <td className="p-3 text-right text-green-400 font-bold">{formatCurrency(sale.value)}</td>
+                                        <td className="p-3 rounded-r-lg text-center"><button onClick={() => handleDeleteSale(sale.id, sale.value)} className="p-2 text-gray-500 hover:text-red-500 transition-all"><Trash2 size={16}/></button></td>
                                     </tr>
                                 ))}
                             </tbody>
